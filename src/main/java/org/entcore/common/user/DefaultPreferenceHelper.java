@@ -6,7 +6,6 @@ import io.vertx.core.Promise;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonObject;
-import org.entcore.common.http.request.JsonHttpServerRequest;
 import org.entcore.common.user.dto.UserPreferenceDto;
 
 public class DefaultPreferenceHelper implements PreferenceHelper {
@@ -27,7 +26,7 @@ public class DefaultPreferenceHelper implements PreferenceHelper {
         }
         JsonObject params = new JsonObject();
         params.put("action", "v1.set.currentuser");
-        params.put("request", new JsonObject().put("headers", JsonHttpServerRequest.toJson(request)));
+        params.put("request", new JsonObject().put("headers", new JsonObject().put("Cookie", request.getHeader("Cookie"))));
         params.put("message", JsonObject.mapFrom(preference));
 
         eventBus.request(USER_BOOK_PREF, params, messageAsyncResult -> {
@@ -47,7 +46,7 @@ public class DefaultPreferenceHelper implements PreferenceHelper {
 
         JsonObject params = new JsonObject();
         params.put("action", "v1.get.currentuser");
-        params.put("request", JsonHttpServerRequest.toJson(request));
+        params.put("request", new JsonObject().put("headers", new JsonObject().put("Cookie", request.getHeader("Cookie"))));
 
         eventBus.request(USER_BOOK_PREF, params, asyncResult -> {
             if (asyncResult.failed()) {
