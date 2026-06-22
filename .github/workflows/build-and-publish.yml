@@ -49,8 +49,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build frontend
+      - name: Generate server-rendered view templates
+        run: |
+          # Reproduit l'etape buildFrontend de build.sh : copie view-src -> view
+          # en substituant @@VERSION (cache-busting). Sans cela le jar ne contient
+          # que view-src/ (source non traitee) -> 500 sur GET /calendar.
+          mkdir -p src/main/resources/view
+          VERSION=$(node -e "process.stdout.write(String(Date.now()))")
+          find src/main/resources/view-src -type f \( -name "*.html" -o -name "*.json" \) | while read -r file; do
+            dest="src/main/resources/view/${file#src/main/resources/view-src/}"
+            mkdir -p "$(dirname "$dest")"
+            sed "s/@@VERSION/$VERSION/g" "$file" > "$dest"
+          done
+
+      - name: Build frontend (JS bundles)
         run: pnpm build
+
+      - name: Build stylesheet
+        run: pnpm build:sass
+
+      - name: Verify build outputs
+        run: |
+          test -f src/main/resources/view/calendar.html        || { echo "::error::view/calendar.html missing"; exit 1; }
+          test -f src/main/resources/public/dist/application.js || { echo "::error::public/dist/application.js missing"; exit 1; }
+          test -f src/main/resources/public/js/behaviours.js    || { echo "::error::public/js/behaviours.js missing"; exit 1; }
+          test -f src/main/resources/public/css/calendar.css    || { echo "::error::public/css/calendar.css missing"; exit 1; }
 
       - name: Upload frontend assets
         uses: actions/upload-artifact@v4
@@ -163,6 +186,47 @@ jobs:
             -Dpackaging=jar \
             -DrepositoryId=github \
             -Durl="https://maven.pkg.github.com/${{ github.repository }}" \
+            -B
+
+      - name: Configure Maven for rct-nexus
+        if: github.ref == 'refs/heads/4.2.7-patched-dev' || startsWith(github.ref, 'refs/tags/')
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                        https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>pt-releases</id>
+                <username>${env.NEXUS_USER}</username>
+                <password>${env.NEXUS_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+      - name: Publish fat JAR to rct-nexus
+        if: github.ref == 'refs/heads/4.2.7-patched-dev' || startsWith(github.ref, 'refs/tags/')
+        env:
+          NEXUS_USER: ${{ secrets.NEXUS_USER }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          FAT_JAR=$(ls target/*-fat.jar 2>/dev/null | head -1)
+          if [ -z "${FAT_JAR}" ]; then echo "::error::Fat JAR not found"; exit 1; fi
+          mvn deploy:deploy-file \
+            -Dfile="${FAT_JAR}" \
+            -DgroupId="${GROUP_ID}" \
+            -DartifactId="${ARTIFACT_ID}" \
+            -Dversion="${VERSION}" \
+            -Dclassifier=fat \
+            -Dpackaging=jar \
+            -DrepositoryId=pt-releases \
+            -Durl="https://rct-nexus.tech.fr/repository/maven-releases/" \
             -B
 
       - name: Create GitHub Release
