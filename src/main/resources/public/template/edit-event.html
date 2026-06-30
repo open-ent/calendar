@@ -78,9 +78,7 @@
                                 <label>
                                     <i18n>calendar.event.calendar</i18n>
                                 </label>
-                                <span ng-if="calendarEvent._id" ng-repeat="calendar in calendarEvent.calendar">
-                                [[calendar.title]][[$last ? '' : ', ']]</span>
-                                <multi-combo ng-if="!calendarEvent._id"
+                                <multi-combo
                                              class="twelve cell multi-combo"
                                              title="[[ lang.translate('calendar.event.edit.select.one') ]]"
                                              ng-click="changeCalendarEventCalendar()"
@@ -89,10 +87,10 @@
                                              order-by="title"
                                              filtered-model="selectedCalendarInEvent"
                                 />
-                                <div class="select-blocks" ng-if="!calendarEvent._id">
+                                <div class="select-blocks">
                                     <div ng-repeat="calendar in selectedCalendarInEvent"
                                     ng-click="dropCalendar(calendar)">
-                                        [[calendar]]
+                                        [[calendar.title]]
                                     </div>
                                 </div>
                             </div>

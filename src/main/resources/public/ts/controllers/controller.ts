@@ -782,6 +782,16 @@ export const calendarController = ng.controller('CalendarController',
                 originalEvent == undefined ? toasts.warning(lang.translate('calendar.event.get.error')) : $scope.resetMultipleDayEventInfo(originalEvent);
             }
             $scope.calendar = calendarEvent.calendar[0];
+            // Pré-sélectionne l'agenda d'appartenance de l'événement dans le sélecteur
+            // d'édition (sinon le menu déroulant s'ouvre vide et l'utilisateur doit le
+            // resélectionner manuellement — risque de mauvaise affectation).
+            $scope.calendarAsContribRight = new Array<Calendar>();
+            $scope.selectedCalendarInEvent = new Array<Calendar>();
+            setListCalendarWithContribFilter();
+            if (Array.isArray(calendarEvent.calendar)) {
+                $scope.selectedCalendarInEvent = $scope.calendarAsContribRight.filter(
+                    (c: Calendar) => calendarEvent.calendar.some((ec: Calendar) => ec._id === c._id));
+            }
             $scope.createContentToWatch();
             $scope.calendarEvent.showDetails = true;
              if (!$scope.calendarEvent.parentId) {
