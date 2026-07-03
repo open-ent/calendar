@@ -73,10 +73,17 @@ public class CalendarController extends MongoDbControllerHelper {
     private final PlatformHelper platformHelper;
     private final EventServiceMongo eventServiceMongo;
 
+    /** IHM par défaut : "react" (nouvelle) ou "angular" (ancienne), piloté par la conf `frontend-ui`.
+     *  Défaut "angular" tant que la migration React (CCTP 51C) n'a pas la parité.
+     *  NB : la génération springboard retire les clés de conf inconnues (dont `frontend-ui`) →
+     *  c'est ce défaut Java qui pilote réellement ; override par `?ui=react|angular`. */
+    private String frontendUi = "angular";
+
     @Override
     public void init(Vertx vertx, JsonObject config, RouteMatcher rm,
                      Map<String, fr.wseduc.webutils.security.SecuredAction> securedActions) {
         super.init(vertx, config, rm, securedActions);
+        this.frontendUi = "react".equals(config.getString("frontend-ui", "angular")) ? "react" : "angular";
     }
 
     public CalendarController(String collection, ServiceFactory serviceFactory, EventBus eb, JsonObject config) {
@@ -101,6 +108,12 @@ public class CalendarController extends MongoDbControllerHelper {
     public void view(HttpServerRequest request) {
         String host = getHost(request);
         String lang = I18n.acceptLanguage(request);
+        // Choix de l'IHM (CCTP 51C — migration React) : défaut piloté par la conf `frontend-ui`
+        // (react|angular, défaut angular), override par requête `?ui=react|angular`.
+        // calendar.html = IHM AngularJS existante (défaut) ; calendar-react.html = nouvelle IHM React.
+        final String uiParam = request.getParam("ui");
+        final String ui = ("react".equals(uiParam) || "angular".equals(uiParam)) ? uiParam : frontendUi;
+        final String view = "react".equals(ui) ? "calendar-react.html" : "calendar.html";
         UserUtils.getUserInfos(eb, request, user -> {
             if (user != null) {
                 final JsonObject context = new JsonObject();
@@ -111,10 +124,10 @@ public class CalendarController extends MongoDbControllerHelper {
                         .onSuccess(calendar -> {
                             if (calendar.isEmpty() || calendar.fieldNames().isEmpty()) {
                                 calendarService.createDefaultCalendar(user, host, lang)
-                                        .onSuccess(res -> renderView(request, context))
+                                        .onSuccess(res -> renderView(request, context, view, null))
                                         .onFailure(err -> renderError(request));
                             } else {
-                                renderView(request, context);
+                                renderView(request, context, view, null);
                             }
                             // Create event "access to application Calendar" and store it, for module "statistics"
                             eventHelper.onAccess(request);
