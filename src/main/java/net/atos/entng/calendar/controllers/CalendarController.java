@@ -74,16 +74,17 @@ public class CalendarController extends MongoDbControllerHelper {
     private final EventServiceMongo eventServiceMongo;
 
     /** IHM par défaut : "react" (nouvelle) ou "angular" (ancienne), piloté par la conf `frontend-ui`.
-     *  Défaut "angular" tant que la migration React (CCTP 51C) n'a pas la parité.
+     *  Défaut "react" : la migration React (CCTP 51C) a la parité (agenda jour/semaine/mois,
+     *  calendriers + événements CRUD, partage calendrier + événement).
      *  NB : la génération springboard retire les clés de conf inconnues (dont `frontend-ui`) →
      *  c'est ce défaut Java qui pilote réellement ; override par `?ui=react|angular`. */
-    private String frontendUi = "angular";
+    private String frontendUi = "react";
 
     @Override
     public void init(Vertx vertx, JsonObject config, RouteMatcher rm,
                      Map<String, fr.wseduc.webutils.security.SecuredAction> securedActions) {
         super.init(vertx, config, rm, securedActions);
-        this.frontendUi = "react".equals(config.getString("frontend-ui", "angular")) ? "react" : "angular";
+        this.frontendUi = "angular".equals(config.getString("frontend-ui", "react")) ? "angular" : "react";
     }
 
     public CalendarController(String collection, ServiceFactory serviceFactory, EventBus eb, JsonObject config) {
