@@ -39,6 +39,28 @@ export interface EventInput {
   description?: string;
 }
 
+// ── Partage (modèle entcore batch, comme forum/rbs) ──────────────────────────
+export interface ShareAction {
+  name: string[];
+  displayName: string;
+  type: string;
+}
+export interface ShareVisible {
+  id: string;
+  name?: string;
+  username?: string;
+}
+export interface ShareJson {
+  actions: ShareAction[];
+  groups: { visibles: ShareVisible[]; checked: Record<string, string[]> };
+  users: { visibles: ShareVisible[]; checked: Record<string, string[]> };
+}
+export interface ShareBatch {
+  users: Record<string, string[]>;
+  groups: Record<string, string[]>;
+  bookmarks: Record<string, string[]>;
+}
+
 /** Lit le cookie XSRF-TOKEN pour l'injecter en header (protection CSRF entcore). */
 function xsrfHeader(): Record<string, string> {
   const m = typeof document !== 'undefined' ? document.cookie.match(/XSRF-TOKEN=([^;]+)/) : null;
@@ -93,6 +115,20 @@ export const deleteEvent = async (calendarId: string, eventId: string): Promise<
   if (!res.ok && res.status !== 204) throw new Error(String(res.status));
 };
 
+// ── Partage d'un calendrier ───────────────────────────────────────────────────
+export const getCalendarShare = async (calendarId: string): Promise<ShareJson> =>
+  json<ShareJson>(await fetch(`/calendar/share/json/${calendarId}`, base));
+
+export const shareCalendarBatch = async (calendarId: string, batch: ShareBatch): Promise<void> => {
+  const res = await fetch(`/calendar/share/resource/${calendarId}`, {
+    ...base,
+    method: 'PUT',
+    headers: mutHeaders(),
+    body: JSON.stringify(batch),
+  });
+  if (!res.ok) throw new Error(String(res.status));
+};
+
 export const api = {
   getCalendars,
   createCalendar,
@@ -102,4 +138,6 @@ export const api = {
   createEvent,
   updateEvent,
   deleteEvent,
+  getCalendarShare,
+  shareCalendarBatch,
 };

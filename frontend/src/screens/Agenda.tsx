@@ -6,11 +6,13 @@ import { api, Calendar, CalendarEvent } from '../api';
 import { calendarColor, isoTime, isSameDay, startOfWeek, weekDays } from '../utils';
 import { CalendarDialog } from './CalendarDialog';
 import { EventDialog } from './EventDialog';
+import { ShareDialog } from './ShareDialog';
 
 const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
 type EventDialogState = { event?: CalendarEvent; defaultCalendarId?: string } | null;
 type CalendarDialogState = { mode: 'new' } | { mode: 'edit'; calendar: Calendar } | null;
+type ShareDialogState = { calendarId: string; calendarName: string } | null;
 
 /** Vue agenda hebdomadaire : barre latérale des calendriers + grille 7 jours des événements. */
 export function Agenda() {
@@ -53,6 +55,7 @@ export function Agenda() {
 
   const [eventDialog, setEventDialog] = useState<EventDialogState>(null);
   const [calendarDialog, setCalendarDialog] = useState<CalendarDialogState>(null);
+  const [shareDialog, setShareDialog] = useState<ShareDialogState>(null);
 
   const deleteCalMut = useMutation({
     mutationFn: (id: string) => api.deleteCalendar(id),
@@ -87,6 +90,9 @@ export function Agenda() {
           onClose={() => setCalendarDialog(null)}
         />
       )}
+      {shareDialog && (
+        <ShareDialog calendarId={shareDialog.calendarId} calendarName={shareDialog.calendarName} onClose={() => setShareDialog(null)} />
+      )}
 
       <div className="d-flex align-items-center justify-content-between mb-16">
         <h1 className="m-0">{t('calendar.title', { defaultValue: 'Agenda' })}</h1>
@@ -119,6 +125,9 @@ export function Agenda() {
                   {c.title}
                 </label>
                 <span className="d-flex gap-4">
+                  <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} ${c.title}`} onClick={() => setShareDialog({ calendarId: c._id, calendarName: c.title })}>
+                    ⇄
+                  </button>
                   <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.edit', { defaultValue: 'Modifier' })} ${c.title}`} onClick={() => setCalendarDialog({ mode: 'edit', calendar: c })}>
                     ✎
                   </button>
