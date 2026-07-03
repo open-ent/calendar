@@ -150,8 +150,14 @@ jobs:
 
       - name: Configure Maven for GitHub Packages
         if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
         run: |
           mkdir -p ~/.m2
+          # ⚠️ Settings COMPLET : garder le repository GitHub Packages (open-ent/entcore-v2), sinon
+          # `mvn help:evaluate` du step publish ne peut pas résoudre le parent app-parent -> BUILD FAILURE
+          # -> `bash -e` tue le script AVANT le `ls` (faux « Fat JAR not found »). CCTP 51C — CI publish.
           cat > ~/.m2/settings.xml << 'EOF'
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -164,6 +170,23 @@ jobs:
                 <password>${env.GITHUB_TOKEN}</password>
               </server>
             </servers>
+            <profiles>
+              <profile>
+                <id>github-packages</id>
+                <repositories>
+                  <repository>
+                    <id>github</id>
+                    <name>GitHub open-ent Packages</name>
+                    <url>https://maven.pkg.github.com/open-ent/entcore-v2</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                  </repository>
+                </repositories>
+              </profile>
+            </profiles>
+            <activeProfiles>
+              <activeProfile>github-packages</activeProfile>
+            </activeProfiles>
           </settings>
           EOF
 
