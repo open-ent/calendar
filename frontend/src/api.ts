@@ -129,6 +129,20 @@ export const shareCalendarBatch = async (calendarId: string, batch: ShareBatch):
   if (!res.ok) throw new Error(String(res.status));
 };
 
+// ── Partage d'un événement ────────────────────────────────────────────────────
+export const getEventShare = async (eventId: string): Promise<ShareJson> =>
+  json<ShareJson>(await fetch(`/calendar/calendarevent/share/json/${eventId}`, base));
+
+export const shareEventBatch = async (eventId: string, batch: ShareBatch): Promise<void> => {
+  const res = await fetch(`/calendar/calendarevent/share/resource/${eventId}`, {
+    ...base,
+    method: 'PUT',
+    headers: mutHeaders(),
+    body: JSON.stringify(batch),
+  });
+  if (!res.ok) throw new Error(String(res.status));
+};
+
 export const api = {
   getCalendars,
   createCalendar,
@@ -140,4 +154,6 @@ export const api = {
   deleteEvent,
   getCalendarShare,
   shareCalendarBatch,
+  getEventShare,
+  shareEventBatch,
 };

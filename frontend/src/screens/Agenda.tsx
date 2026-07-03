@@ -14,7 +14,7 @@ const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 type View = 'day' | 'week' | 'month';
 type EventDialogState = { event?: CalendarEvent; defaultCalendarId?: string } | null;
 type CalendarDialogState = { mode: 'new' } | { mode: 'edit'; calendar: Calendar } | null;
-type ShareDialogState = { calendarId: string; calendarName: string } | null;
+type ShareDialogState = { resourceId: string; resourceName: string; title: string; kind: 'calendar' | 'event' } | null;
 
 /** Agenda : barre latérale des calendriers + vue Jour / Semaine / Mois des événements. */
 export function Agenda() {
@@ -92,6 +92,9 @@ export function Agenda() {
       <div className="d-flex justify-content-between align-items-start gap-4">
         <strong>{e.allday ? t('calendar.event.allday.short', { defaultValue: 'Journée' }) : isoTime(e.startMoment)}</strong>
         <span className="d-flex gap-4">
+          <button type="button" className="btn btn-link p-0" style={{ fontSize: 11 }} aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} ${e.title}`} onClick={() => setShareDialog({ resourceId: e._id, resourceName: e.title, title: t('calendar.event.share.title', { defaultValue: "Partager l'événement" }), kind: 'event' })}>
+            ⇄
+          </button>
           <button type="button" className="btn btn-link p-0" style={{ fontSize: 11 }} aria-label={`${t('calendar.edit', { defaultValue: 'Modifier' })} ${e.title}`} onClick={() => setEventDialog({ event: e })}>
             ✎
           </button>
@@ -121,7 +124,16 @@ export function Agenda() {
       {calendarDialog && (
         <CalendarDialog calendar={calendarDialog.mode === 'edit' ? calendarDialog.calendar : undefined} onClose={() => setCalendarDialog(null)} />
       )}
-      {shareDialog && <ShareDialog calendarId={shareDialog.calendarId} calendarName={shareDialog.calendarName} onClose={() => setShareDialog(null)} />}
+      {shareDialog && (
+        <ShareDialog
+          resourceId={shareDialog.resourceId}
+          resourceName={shareDialog.resourceName}
+          title={shareDialog.title}
+          getShare={shareDialog.kind === 'calendar' ? api.getCalendarShare : api.getEventShare}
+          shareBatch={shareDialog.kind === 'calendar' ? api.shareCalendarBatch : api.shareEventBatch}
+          onClose={() => setShareDialog(null)}
+        />
+      )}
 
       <div className="d-flex align-items-center justify-content-between mb-16">
         <h1 className="m-0">{t('calendar.title', { defaultValue: 'Agenda' })}</h1>
@@ -149,7 +161,7 @@ export function Agenda() {
                   {c.title}
                 </label>
                 <span className="d-flex gap-4">
-                  <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} ${c.title}`} onClick={() => setShareDialog({ calendarId: c._id, calendarName: c.title })}>
+                  <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} ${c.title}`} onClick={() => setShareDialog({ resourceId: c._id, resourceName: c.title, title: t('calendar.share.title', { defaultValue: 'Partager le calendrier' }), kind: 'calendar' })}>
                     ⇄
                   </button>
                   <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.edit', { defaultValue: 'Modifier' })} ${c.title}`} onClick={() => setCalendarDialog({ mode: 'edit', calendar: c })}>

@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { api, ShareAction } from '../api';
+import { ShareAction, ShareBatch, ShareJson } from '../api';
 import { Modal } from './Modal';
 
-/** Niveaux de droit d'un calendrier (ordre croissant) + libellés FR. */
+/** Niveaux de droit (ordre croissant) + libellés FR — communs calendrier/événement. */
 const LEVELS: { key: string; fr: string }[] = [
   { key: 'calendar.read', fr: 'Lecture' },
   { key: 'calendar.contrib', fr: 'Contribution' },
@@ -20,11 +20,28 @@ interface Row {
   levels: Set<string>;
 }
 
-/** Partage d'un calendrier (modèle entcore batch, comme forum/rbs). */
-export function ShareDialog({ calendarId, calendarName, onClose }: { calendarId: string; calendarName: string; onClose: () => void }) {
+/**
+ * Partage d'une ressource (calendrier OU événement) via le modèle entcore batch.
+ * Générique : les fonctions `getShare`/`shareBatch` déterminent la ressource ciblée.
+ */
+export function ShareDialog({
+  resourceId,
+  resourceName,
+  title,
+  getShare,
+  shareBatch,
+  onClose,
+}: {
+  resourceId: string;
+  resourceName: string;
+  title: string;
+  getShare: (id: string) => Promise<ShareJson>;
+  shareBatch: (id: string, batch: ShareBatch) => Promise<void>;
+  onClose: () => void;
+}) {
   const { t } = useTranslation(['calendar', 'common']);
   const qc = useQueryClient();
-  const shareQuery = useQuery({ queryKey: ['calendar', 'share', calendarId], queryFn: () => api.getCalendarShare(calendarId) });
+  const shareQuery = useQuery({ queryKey: ['calendar', 'share', resourceId], queryFn: () => getShare(resourceId) });
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
@@ -82,16 +99,16 @@ export function ShareDialog({ calendarId, calendarName, onClose }: { calendarId:
         r.levels.forEach((lvl) => (actionsByLevel.get(lvl)?.name ?? []).forEach((n) => acts.add(n)));
         (r.kind === 'group' ? batch.groups : batch.users)[r.id] = [...acts];
       });
-      await api.shareCalendarBatch(calendarId, batch);
+      await shareBatch(resourceId, batch);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['calendar', 'share', calendarId] });
+      qc.invalidateQueries({ queryKey: ['calendar', 'share', resourceId] });
       onClose();
     },
   });
 
   return (
-    <Modal title={`${t('calendar.share.title', { defaultValue: 'Partager le calendrier' })} — ${calendarName}`} onClose={onClose}>
+    <Modal title={`${title} — ${resourceName}`} onClose={onClose}>
       {shareQuery.isLoading && <p>{t('calendar.loading', { defaultValue: 'Chargement…' })}</p>}
       {shareQuery.isError && (
         <div className="alert alert-warning" role="alert">
