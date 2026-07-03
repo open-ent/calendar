@@ -213,11 +213,26 @@ jobs:
           NEXUS_USER: ${{ secrets.NEXUS_USER }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
+          set -euo pipefail
           GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
           ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           FAT_JAR=$(ls target/*-fat.jar 2>/dev/null | head -1)
           if [ -z "${FAT_JAR}" ]; then echo "::error::Fat JAR not found"; exit 1; fi
+
+          # maven-releases interdit l'écrasement d'un artefact existant. Le flux "-patched" republie
+          # la MÊME version à chaque correctif : on supprime donc d'abord le composant existant
+          # (best-effort) avant de redéployer, faute de quoi le deploy échoue (HTTP 400).
+          NEXUS="https://rct-nexus.tech.fr"
+          echo "Recherche d'un composant existant ${GROUP_ID}:${ARTIFACT_ID}:${VERSION} sur maven-releases…"
+          IDS=$(curl -sf -u "${NEXUS_USER}:${NEXUS_PASSWORD}" \
+            "${NEXUS}/service/rest/v1/search?repository=maven-releases&maven.groupId=${GROUP_ID}&maven.artifactId=${ARTIFACT_ID}&version=${VERSION}" \
+            | jq -r '.items[].id' || true)
+          for id in ${IDS}; do
+            echo "Suppression du composant existant ${id}"
+            curl -sf -u "${NEXUS_USER}:${NEXUS_PASSWORD}" -X DELETE "${NEXUS}/service/rest/v1/components/${id}" || true
+          done
+
           mvn deploy:deploy-file \
             -Dfile="${FAT_JAR}" \
             -DgroupId="${GROUP_ID}" \
@@ -226,7 +241,7 @@ jobs:
             -Dclassifier=fat \
             -Dpackaging=jar \
             -DrepositoryId=pt-releases \
-            -Durl="https://rct-nexus.tech.fr/repository/maven-releases/" \
+            -Durl="${NEXUS}/repository/maven-releases/" \
             -B
 
       - name: Create GitHub Release
