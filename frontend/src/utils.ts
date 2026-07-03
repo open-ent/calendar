@@ -56,6 +56,27 @@ export function isoUtcToLocalInput(iso?: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** Premier jour (lundi) de la grille mensuelle contenant `d` (peut être en fin de mois précédent). */
+export function startOfMonthGrid(d: Date): Date {
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  return startOfWeek(first);
+}
+
+/** Grille mensuelle de 6 semaines × 7 jours (42 dates) débutant au lundi précédant le 1er du mois. */
+export function monthGrid(d: Date): Date[] {
+  const start = startOfMonthGrid(d);
+  return Array.from({ length: 42 }, (_, i) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    return day;
+  });
+}
+
+/** Même mois civil que `ref` ? */
+export function isSameMonth(day: Date, ref: Date): boolean {
+  return day.getFullYear() === ref.getFullYear() && day.getMonth() === ref.getMonth();
+}
+
 /** Couleur CSS d'un calendrier (repli). */
 export function calendarColor(color?: string): string {
   return color && color.trim() ? color : '#2a9cc8';
