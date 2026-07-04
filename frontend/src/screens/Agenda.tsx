@@ -1,3 +1,4 @@
+import { useEdificeClient } from '@open-ent/react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +21,8 @@ type ShareDialogState = { resourceId: string; resourceName: string; title: strin
 export function Agenda() {
   const { t } = useTranslation(['calendar', 'common']);
   const qc = useQueryClient();
+  const { user } = useEdificeClient();
+  const myUserId = (user as { userId?: string } | undefined)?.userId ?? '';
 
   const calendarsQuery = useQuery({ queryKey: ['calendar', 'calendars'], queryFn: api.getCalendars });
   const calendars = useMemo(() => calendarsQuery.data ?? [], [calendarsQuery.data]);
@@ -153,7 +156,7 @@ export function Agenda() {
           </div>
           {calendarsQuery.isLoading && <p>{t('calendar.loading', { defaultValue: 'Chargement…' })}</p>}
           <ul className="list-unstyled">
-            {calendars.map((c) => (
+            {calendars.filter((c) => !myUserId || c.owner?.userId === myUserId).map((c) => (
               <li key={c._id} className="d-flex align-items-center justify-content-between py-4">
                 <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
                   <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
@@ -181,6 +184,26 @@ export function Agenda() {
               </li>
             ))}
           </ul>
+
+          {/* Agendas partagés avec moi (parité Angular : section distincte, lecture) */}
+          <div className="mt-16">
+            <strong>{t('calendar.sharedcalendars', { defaultValue: 'Agendas partagés' })}</strong>
+            <ul className="list-unstyled mt-8">
+              {calendars.filter((c) => myUserId && c.owner?.userId !== myUserId).length === 0 && (
+                <li className="text-muted" style={{ fontSize: 13 }}>{t('calendar.shared.none', { defaultValue: "Pas d'agenda" })}</li>
+              )}
+              {calendars.filter((c) => myUserId && c.owner?.userId !== myUserId).map((c) => (
+                <li key={c._id} className="py-4">
+                  <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
+                    <span aria-hidden style={{ width: 12, height: 12, borderRadius: 3, background: calendarColor(c.color), display: 'inline-block' }} />
+                    {c.title}
+                    {c.owner?.displayName && <span className="text-muted" style={{ fontSize: 12 }}>({c.owner.displayName})</span>}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
         </aside>
 
         {/* Zone de vue */}
