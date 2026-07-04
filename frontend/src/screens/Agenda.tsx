@@ -58,6 +58,20 @@ export function Agenda() {
   };
 
   const [eventDialog, setEventDialog] = useState<EventDialogState>(null);
+
+  // Ajout d'un agenda externe (flux ICS, URL sur liste blanche des plateformes).
+  const [addingExternal, setAddingExternal] = useState(false);
+  const [externalTitle, setExternalTitle] = useState('');
+  const [externalUrl, setExternalUrl] = useState('');
+  const externalMut = useMutation({
+    mutationFn: () => api.addExternalCalendar({ title: externalTitle.trim(), color: '#e63b3b', icsLink: externalUrl.trim() }),
+    onSuccess: () => {
+      setAddingExternal(false);
+      setExternalTitle('');
+      setExternalUrl('');
+      qc.invalidateQueries({ queryKey: ['calendar'] });
+    },
+  });
   const [calendarDialog, setCalendarDialog] = useState<CalendarDialogState>(null);
   const [shareDialog, setShareDialog] = useState<ShareDialogState>(null);
 
@@ -122,7 +136,8 @@ export function Agenda() {
   return (
     <div>
       {eventDialog && (
-        <EventDialog calendars={calendars} event={eventDialog.event} defaultCalendarId={eventDialog.defaultCalendarId} onClose={() => setEventDialog(null)} />
+        // Les agendas externes (flux ICS) sont en lecture seule : exclus du choix d'écriture.
+        <EventDialog calendars={calendars.filter((c) => !c.isExternal)} event={eventDialog.event} defaultCalendarId={eventDialog.defaultCalendarId} onClose={() => setEventDialog(null)} />
       )}
       {calendarDialog && (
         <CalendarDialog calendar={calendarDialog.mode === 'edit' ? calendarDialog.calendar : undefined} onClose={() => setCalendarDialog(null)} />
@@ -140,7 +155,7 @@ export function Agenda() {
 
       <div className="d-flex align-items-center justify-content-between mb-16">
         <h1 className="m-0">{t('calendar.title', { defaultValue: 'Agenda' })}</h1>
-        <button type="button" className="btn btn-primary" disabled={calendars.length === 0} onClick={() => setEventDialog({ defaultCalendarId: visibleCalendars[0]?._id })}>
+        <button type="button" className="btn btn-primary" disabled={calendars.filter((c) => !c.isExternal).length === 0} onClick={() => setEventDialog({ defaultCalendarId: visibleCalendars.filter((c) => !c.isExternal)[0]?._id })}>
           {t('calendar.event.new', { defaultValue: 'Nouvel événement' })}
         </button>
       </div>
@@ -156,7 +171,7 @@ export function Agenda() {
           </div>
           {calendarsQuery.isLoading && <p>{t('calendar.loading', { defaultValue: 'Chargement…' })}</p>}
           <ul className="list-unstyled">
-            {calendars.filter((c) => !myUserId || c.owner?.userId === myUserId).map((c) => (
+            {calendars.filter((c) => !c.isExternal && (!myUserId || c.owner?.userId === myUserId)).map((c) => (
               <li key={c._id} className="d-flex align-items-center justify-content-between py-4">
                 <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
                   <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
@@ -189,10 +204,10 @@ export function Agenda() {
           <div className="mt-16">
             <strong>{t('calendar.sharedcalendars', { defaultValue: 'Agendas partagés' })}</strong>
             <ul className="list-unstyled mt-8">
-              {calendars.filter((c) => myUserId && c.owner?.userId !== myUserId).length === 0 && (
+              {calendars.filter((c) => !c.isExternal && myUserId && c.owner?.userId !== myUserId).length === 0 && (
                 <li className="text-muted" style={{ fontSize: 13 }}>{t('calendar.shared.none', { defaultValue: "Pas d'agenda" })}</li>
               )}
-              {calendars.filter((c) => myUserId && c.owner?.userId !== myUserId).map((c) => (
+              {calendars.filter((c) => !c.isExternal && myUserId && c.owner?.userId !== myUserId).map((c) => (
                 <li key={c._id} className="py-4">
                   <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
                     <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
@@ -200,6 +215,74 @@ export function Agenda() {
                     {c.title}
                     {c.owner?.displayName && <span className="text-muted" style={{ fontSize: 12 }}>({c.owner.displayName})</span>}
                   </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Agendas externes (flux ICS synchronisés — parité Angular « Ajouter un agenda externe ») */}
+          <div className="mt-16">
+            <div className="d-flex align-items-center justify-content-between">
+              <strong>{t('calendar.externalcalendars', { defaultValue: 'Agendas externes' })}</strong>
+              <button type="button" className="btn btn-link p-0" onClick={() => setAddingExternal((v) => !v)}>
+                + {t('calendar.external.add', { defaultValue: 'Ajouter' })}
+              </button>
+            </div>
+            {addingExternal && (
+              <form
+                className="mt-8 d-flex flex-column gap-8"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (externalTitle.trim() && externalUrl.trim()) externalMut.mutate();
+                }}
+              >
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  placeholder={t('calendar.external.title', { defaultValue: "Titre de l'agenda" })}
+                  aria-label={t('calendar.external.title', { defaultValue: "Titre de l'agenda" })}
+                  value={externalTitle}
+                  onChange={(e) => setExternalTitle(e.target.value)}
+                />
+                <input
+                  type="url"
+                  className="form-control form-control-sm"
+                  placeholder={t('calendar.external.url', { defaultValue: 'URL du flux ICS' })}
+                  aria-label={t('calendar.external.url', { defaultValue: 'URL du flux ICS' })}
+                  value={externalUrl}
+                  onChange={(e) => setExternalUrl(e.target.value)}
+                />
+                {externalMut.isError && (
+                  <div className="text-danger" style={{ fontSize: 12 }}>
+                    {t('calendar.external.error', { defaultValue: 'Ajout refusé (URL non autorisée par la plateforme ?).' })}
+                  </div>
+                )}
+                <button type="submit" className="btn btn-primary btn-sm" disabled={!externalTitle.trim() || !externalUrl.trim() || externalMut.isPending}>
+                  {t('calendar.external.save', { defaultValue: 'Ajouter l’agenda externe' })}
+                </button>
+              </form>
+            )}
+            <ul className="list-unstyled mt-8">
+              {calendars.filter((c) => c.isExternal).length === 0 && (
+                <li className="text-muted" style={{ fontSize: 13 }}>{t('calendar.external.none', { defaultValue: "Pas d'agenda" })}</li>
+              )}
+              {calendars.filter((c) => c.isExternal).map((c) => (
+                <li key={c._id} className="d-flex align-items-center justify-content-between py-4">
+                  <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
+                    <span aria-hidden style={{ width: 12, height: 12, borderRadius: 3, background: calendarColor(c.color), display: 'inline-block' }} />
+                    {c.title}
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-link p-0 text-danger"
+                    aria-label={`${t('calendar.delete', { defaultValue: 'Supprimer' })} ${c.title}`}
+                    onClick={() => {
+                      if (window.confirm(t('calendar.external.confirm.delete', { defaultValue: 'Supprimer cet agenda externe ?' }))) deleteCalMut.mutate(c._id);
+                    }}
+                  >
+                    ✕
+                  </button>
                 </li>
               ))}
             </ul>

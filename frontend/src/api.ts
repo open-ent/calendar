@@ -11,6 +11,9 @@ export interface Calendar {
   owner?: { userId: string; displayName: string };
   isDefault?: boolean;
   shared?: unknown[];
+  /** Agenda externe : alimenté par un flux ICS (icsLink), synchronisé côté serveur. */
+  isExternal?: boolean;
+  icsLink?: string;
 }
 
 /** Un événement. Dates ISO (UTC) dans `startMoment`/`endMoment`. */
@@ -86,6 +89,17 @@ export const createCalendar = async (data: { title: string; color: string }): Pr
     await fetch('/calendar/calendars', { ...base, method: 'POST', headers: mutHeaders(), body: JSON.stringify(data) }),
   );
 
+/** Ajoute un agenda externe (flux ICS) — l'URL doit correspondre à une plateforme autorisée. */
+export const addExternalCalendar = async (data: { title: string; color: string; icsLink: string }): Promise<void> => {
+  const res = await fetch('/calendar/url', {
+    ...base,
+    method: 'POST',
+    headers: mutHeaders(),
+    body: JSON.stringify({ ...data, isExternal: true }),
+  });
+  if (!res.ok) throw new Error(String(res.status));
+};
+
 export const updateCalendar = async (id: string, data: { title: string; color: string }): Promise<Calendar> =>
   json<Calendar>(
     await fetch(`/calendar/${id}`, { ...base, method: 'PUT', headers: mutHeaders(), body: JSON.stringify(data) }),
@@ -144,6 +158,7 @@ export const shareEventBatch = async (eventId: string, batch: ShareBatch): Promi
 };
 
 export const api = {
+  addExternalCalendar,
   getCalendars,
   createCalendar,
   updateCalendar,
