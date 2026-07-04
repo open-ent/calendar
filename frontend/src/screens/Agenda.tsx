@@ -12,7 +12,7 @@ import { ShareDialog } from './ShareDialog';
 const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-type View = 'day' | 'week' | 'month';
+type View = 'day' | 'week' | 'month' | 'list';
 type EventDialogState = { event?: CalendarEvent; defaultCalendarId?: string } | null;
 type CalendarDialogState = { mode: 'new' } | { mode: 'edit'; calendar: Calendar } | null;
 type ShareDialogState = { resourceId: string; resourceName: string; title: string; kind: 'calendar' | 'event' } | null;
@@ -52,7 +52,7 @@ export function Agenda() {
   const shift = (dir: number) => {
     const d = new Date(cursor);
     if (view === 'day') d.setDate(d.getDate() + dir);
-    else if (view === 'week') d.setDate(d.getDate() + dir * 7);
+    else if (view === 'week' || view === 'list') d.setDate(d.getDate() + dir * 7);
     else d.setMonth(d.getMonth() + dir);
     setCursor(d);
   };
@@ -210,9 +210,9 @@ export function Agenda() {
         <div className="flex-grow-1">
           <div className="d-flex align-items-center justify-content-between mb-16 flex-wrap gap-8">
             <div className="btn-group" role="group" aria-label={t('calendar.views', { defaultValue: 'Vues' })}>
-              {(['day', 'week', 'month'] as View[]).map((v) => (
+              {(['day', 'week', 'month', 'list'] as View[]).map((v) => (
                 <button key={v} type="button" className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={view === v} onClick={() => setView(v)}>
-                  {v === 'day' ? t('calendar.view.day', { defaultValue: 'Jour' }) : v === 'week' ? t('calendar.view.week', { defaultValue: 'Semaine' }) : t('calendar.view.month', { defaultValue: 'Mois' })}
+                  {v === 'day' ? t('calendar.view.day', { defaultValue: 'Jour' }) : v === 'week' ? t('calendar.view.week', { defaultValue: 'Semaine' }) : v === 'month' ? t('calendar.view.month', { defaultValue: 'Mois' }) : t('calendar.view.list', { defaultValue: 'Liste' })}
                 </button>
               ))}
             </div>
@@ -272,6 +272,16 @@ export function Agenda() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Vue Liste (parité Angular) : événements à venir des calendriers visibles, triés par date */}
+          {view === 'list' && (
+            <div>
+              {events.length === 0 && <p className="text-muted">{t('calendar.list.empty', { defaultValue: 'Aucun événement.' })}</p>}
+              {[...events]
+                .sort((a, b) => (a.startMoment || '').localeCompare(b.startMoment || ''))
+                .map((e) => <EventCard key={e._id} e={e} />)}
             </div>
           )}
         </div>
