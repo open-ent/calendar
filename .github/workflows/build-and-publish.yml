@@ -191,6 +191,10 @@ jobs:
           EOF
 
       - name: Publish fat JAR to GitHub Packages
+        # 409 Conflict si la version -patched existe déjà (GitHub Packages refuse d'écraser une
+        # release ; le GITHUB_TOKEN d'Actions n'a pas le scope delete:packages). Republier la même
+        # version = no-op souhaité → on tolère l'échec du step au lieu de rougir tout le run.
+        continue-on-error: true
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
