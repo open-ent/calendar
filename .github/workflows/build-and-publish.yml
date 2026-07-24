@@ -68,12 +68,27 @@ jobs:
       - name: Build stylesheet
         run: pnpm build:sass
 
+      # IHM React de la vue calendar-react.html (/calendar/public/index.js) : sous-projet Vite
+      # frontend/, distinct du bundle racine application.js. Utilise des paquets prives @open-ent
+      # -> auth via OPENENT_PACKAGES_TOKEN (frontend/.npmrc : //npm.pkg.github.com/:_authToken).
+      # Sans cette etape, le fat-mod ne contient pas index.js et ?ui=react est casse (bundle 404).
+      - name: Build frontend React (sous-projet Vite frontend/)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.OPENENT_PACKAGES_TOKEN }}
+        run: |
+          cd frontend
+          pnpm install --no-frozen-lockfile
+          pnpm build
+          mkdir -p ../src/main/resources/public
+          cp -r dist/public/. ../src/main/resources/public/
+
       - name: Verify build outputs
         run: |
           test -f src/main/resources/view/calendar.html        || { echo "::error::view/calendar.html missing"; exit 1; }
           test -f src/main/resources/public/dist/application.js || { echo "::error::public/dist/application.js missing"; exit 1; }
           test -f src/main/resources/public/js/behaviours.js    || { echo "::error::public/js/behaviours.js missing"; exit 1; }
           test -f src/main/resources/public/css/calendar.css    || { echo "::error::public/css/calendar.css missing"; exit 1; }
+          test -f src/main/resources/public/index.js            || { echo "::error::public/index.js (React frontend/) missing"; exit 1; }
 
       - name: Upload frontend assets
         uses: actions/upload-artifact@v4
