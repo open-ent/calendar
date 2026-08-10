@@ -72,7 +72,7 @@ test () {
 }
 
 buildFrontend () {
-  if [ ! -e "pnpm-lock.yaml" ] ; then
+  if [ -z "$(ls -A node_modules 2>/dev/null)" ] ; then
     echo "Running pnpm install..."
     if [ "$NO_DOCKER" = "true" ] ; then
       pnpm install

@@ -2,18 +2,27 @@ services:
   maven:
     image: maven:3.8.6-jdk-8
     user: "$DEFAULT_DOCKER_USER"
-    working_dir: /usr/src/maven
+    # Même souci/fix que le service node ci-dessous : calendar est un submodule git, monter
+    # uniquement ce dossier casse la résolution relative de son .git (buildnumber-maven-plugin
+    # ne détecte alors plus la branche : "not a git repository" -> scmBranch UNKNOWN_BRANCH).
+    working_dir: /repo/modules/calendar
     volumes:
-      - ./:/usr/src/maven
+      - ../../:/repo
       - ~/.m2:/var/maven/.m2
     environment:
       MAVEN_CONFIG: /var/maven/.m2
 
   node:
     image: opendigitaleducation/node:22-alpine-pnpm
-    working_dir: /home/node/app
+    # calendar est un submodule git : son .git est un fichier pointeur relatif vers le
+    # vrai gitdir dans le superprojet (../../.git/modules/modules/calendar), qui a lui-même
+    # un core.worktree relatif (../../../../modules/calendar). Monter uniquement ce dossier
+    # casse ces deux résolutions relatives ("not a git repository" puis "cannot chdir").
+    # Fix : monter tout le superprojet en préservant la même profondeur relative, pour que
+    # ces chemins retombent juste — nécessaire pour pnpm install (dépendance résolue via git).
+    working_dir: /repo/modules/calendar
     network_mode: host
     volumes:
-      - ./:/home/node/app
+      - ../../:/repo
       - ~/.npm:/.npm
       - ~/.ssh:/home/node/.ssh:ro

@@ -24,8 +24,8 @@ importers:
         specifier: 2.4.1
         version: 2.4.1
       entcore:
-        specifier: develop-b2school
-        version: 4.8.16-develop-b2school.202603231504(lodash@4.17.23)
+        specifier: dev
+        version: 4.8.17-dev.202607271230(lodash@4.17.23)
       entcore-toolkit:
         specifier: 1.0.1
         version: 1.0.1(axios@0.27.2)(core-js@2.4.1)(lodash@4.17.23)(typescript@4.8.3)
@@ -1302,6 +1302,7 @@ packages:
   conventional-changelog-atom@2.0.8:
     resolution: {integrity: sha512-xo6v46icsFTK3bb7dY/8m2qvc8sZemRgdqLb/bjpBsH2UyOS8rKNTgcb5025Hri6IpANPApbXMg15QLb1LJpBw==}
     engines: {node: '>=10'}
+    deprecated: This preset is deprecated. Please use conventional-changelog-conventionalcommits or conventional-changelog-angular instead.
 
   conventional-changelog-cli@2.0.12:
     resolution: {integrity: sha512-6wh9W5Gpr9DM40E8cFi0qa6JotVm4Jq+suksuqgKnm544H8ZXsRhgGNXShDASOteY9brv9fX8/+fE/QL1wHqbA==}
@@ -1312,30 +1313,37 @@ packages:
   conventional-changelog-codemirror@2.0.8:
     resolution: {integrity: sha512-z5DAsn3uj1Vfp7po3gpt2Boc+Bdwmw2++ZHa5Ak9k0UKsYAO5mH1UBTN0qSCuJZREIhX6WU4E1p3IW2oRCNzQw==}
     engines: {node: '>=10'}
+    deprecated: This preset is deprecated. Please use conventional-changelog-conventionalcommits or conventional-changelog-angular instead.
 
   conventional-changelog-core@3.2.3:
     resolution: {integrity: sha512-LMMX1JlxPIq/Ez5aYAYS5CpuwbOk6QFp8O4HLAcZxe3vxoCtABkhfjetk8IYdRB9CDQGwJFLR3Dr55Za6XKgUQ==}
     engines: {node: '>=6.9.0'}
+    deprecated: Deprecated and no longer maintained. Please use conventional-changelog instead.
 
   conventional-changelog-ember@2.0.9:
     resolution: {integrity: sha512-ulzIReoZEvZCBDhcNYfDIsLTHzYHc7awh+eI44ZtV5cx6LVxLlVtEmcO+2/kGIHGtw+qVabJYjdI5cJOQgXh1A==}
     engines: {node: '>=10'}
+    deprecated: This preset is deprecated. Please use conventional-changelog-conventionalcommits or conventional-changelog-angular instead.
 
   conventional-changelog-eslint@3.0.9:
     resolution: {integrity: sha512-6NpUCMgU8qmWmyAMSZO5NrRd7rTgErjrm4VASam2u5jrZS0n38V7Y9CzTtLT2qwz5xEChDR4BduoWIr8TfwvXA==}
     engines: {node: '>=10'}
+    deprecated: This preset is deprecated. Please use conventional-changelog-conventionalcommits or conventional-changelog-angular instead.
 
   conventional-changelog-express@2.0.6:
     resolution: {integrity: sha512-SDez2f3iVJw6V563O3pRtNwXtQaSmEfTCaTBPCqn0oG0mfkq0rX4hHBq5P7De2MncoRixrALj3u3oQsNK+Q0pQ==}
     engines: {node: '>=10'}
+    deprecated: This preset is deprecated. Please use conventional-changelog-conventionalcommits or conventional-changelog-angular instead.
 
   conventional-changelog-jquery@3.0.11:
     resolution: {integrity: sha512-x8AWz5/Td55F7+o/9LQ6cQIPwrCjfJQ5Zmfqi8thwUEKHstEn4kTIofXub7plf1xvFA2TqhZlq7fy5OmV6BOMw==}
     engines: {node: '>=10'}
+    deprecated: This preset is deprecated. Please use conventional-changelog-conventionalcommits or conventional-changelog-angular instead.
 
   conventional-changelog-jshint@2.0.9:
     resolution: {integrity: sha512-wMLdaIzq6TNnMHMy31hql02OEQ8nCQfExw1SE0hYL5KvU+JCTuPaDO+7JiogGT2gJAxiUGATdtYYfh+nT+6riA==}
     engines: {node: '>=10'}
+    deprecated: This preset is deprecated. Please use conventional-changelog-conventionalcommits or conventional-changelog-angular instead.
 
   conventional-changelog-preset-loader@2.3.4:
     resolution: {integrity: sha512-GEKRWkrSAZeTq5+YjUZOYxdHq+ci4dNwHvpaBC3+ENalzFWuCWa9EZXSuZBpkr72sMdKB+1fyDV4takK1Lf58g==}
@@ -1601,8 +1609,8 @@ packages:
       lodash: ^4.17.1
       typescript: 2.1.1
 
-  entcore@4.8.16-develop-b2school.202603231504:
-    resolution: {integrity: sha512-UN054XMmzLF8z6yeqhfL55m/f5Ieg6jGi6Tlt5lT6HBDConb7AUbmkF2BUBs/8VxDSl7kQVYcriTUYRDEAq8Yg==}
+  entcore@4.8.17-dev.202607271230:
+    resolution: {integrity: sha512-TYQGXRrwvjHk9bWsXcnb/N+IqiqWkstTYW8fm3sIHvK6L5oAPuPjnFmIxE/QMx13TrIjnffTOp3tDNFKnxDTVg==}
 
   errno@0.1.8:
     resolution: {integrity: sha512-dJ6oBr5SQ1VSd9qkk7ByRgb/1SH4JZjCHSW/mr63/QcXO9zLVxvJ6Oy13nio03rxpSnVDDjFor75SjVeZWPW/A==}
@@ -1962,7 +1970,7 @@ packages:
   git-raw-commits@2.0.0:
     resolution: {integrity: sha512-w4jFEJFgKXMQJ0H0ikBk2S+4KP2VEjhCvLCNqbNRQC8BgGWgLKNCO7a9K9LI+TVT7Gfoloje502sEnctibffgg==}
     engines: {node: '>=6.9.0'}
-    deprecated: This package is no longer maintained. For the JavaScript API, please use @conventional-changelog/git-client instead.
+    deprecated: Deprecated and no longer maintained. Use @conventional-changelog/git-client instead.
     hasBin: true
 
   git-remote-origin-url@2.0.0:
@@ -1972,7 +1980,7 @@ packages:
   git-semver-tags@2.0.3:
     resolution: {integrity: sha512-tj4FD4ww2RX2ae//jSrXZzrocla9db5h0V7ikPl1P/WwoZar9epdUhwR7XHXSgc+ZkNq72BEEerqQuicoEQfzA==}
     engines: {node: '>=6.9.0'}
-    deprecated: This package is no longer maintained. For the JavaScript API, please use @conventional-changelog/git-client instead.
+    deprecated: Deprecated and no longer maintained. Use @conventional-changelog/git-client instead.
     hasBin: true
 
   gitconfiglocal@1.0.0:
@@ -4270,10 +4278,11 @@ packages:
 
   uuid@2.0.3:
     resolution: {integrity: sha512-FULf7fayPdpASncVy4DLh3xydlXEJJpvIELjYjNeQWYUZ9pclcpvCZSr2gkmN2FrrGcI7G/cJsIEwk5/8vfXpg==}
-    deprecated: Please upgrade  to version 7 or higher.  Older versions may use Math.random() in certain circumstances, which is known to be problematic.  See https://v8.dev/blog/math-random for details.
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
 
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   v8-to-istanbul@7.1.2:
@@ -6298,7 +6307,7 @@ snapshots:
       merge2: 1.1.0
       typescript: 4.8.3
 
-  entcore@4.8.16-develop-b2school.202603231504(lodash@4.17.23):
+  entcore@4.8.17-dev.202607271230(lodash@4.17.23):
     dependencies:
       angular: 1.8.3
       angular-route: 1.8.3
@@ -7549,7 +7558,11 @@ snapshots:
       pretty-format: 26.6.2
       throat: 5.0.0
     transitivePeerDependencies:
+      - bufferutil
+      - canvas
       - supports-color
+      - ts-node
+      - utf-8-validate
 
   jest-leak-detector@26.6.2:
     dependencies:
@@ -8066,7 +8079,7 @@ snapshots:
 
   md5.js@1.3.5:
     dependencies:
-      hash-base: 3.0.5
+      hash-base: 3.1.2
       inherits: 2.0.4
       safe-buffer: 5.2.1
 
