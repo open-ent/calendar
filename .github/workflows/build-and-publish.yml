@@ -157,14 +157,23 @@ jobs:
 
       - name: Build fat JAR
         run: |
-          ENTCORE_OPT=""
-          if [ -n "$ENTCORE_VERSION" ]; then ENTCORE_OPT="-DentCoreVersion=$ENTCORE_VERSION"; fi
+          # Verrou entcore patché. Un build déclenché par push n'a pas l'input `entcore_version` :
+          # sans défaut, le pom décidait seul et pouvait retomber sur l'entcore UPSTREAM alors que
+          # la plateforme tourne org.entcore~*~<version>-patched. Ce mélange de versions casse le
+          # rendu des vues EN SILENCE (500 à corps vide, API 200 — constaté sur forum le 2026-08-10).
+          # On résout donc la version effective et on échoue si elle n'est pas « -patched ».
+          # Aucune version en dur ici : la source de vérité reste le pom du fork.
+          ENTCORE_EFF="${ENTCORE_VERSION:-$(mvn help:evaluate -Dexpression=entCoreVersion -q -DforceStdout)}"
+          case "$ENTCORE_EFF" in
+            *-patched) echo "entcore verrouillé sur $ENTCORE_EFF" ;;
+            *) echo "::error::entcore « $ENTCORE_EFF » n'est pas une version -patched — la plateforme tourne org.entcore~*~-patched. Corriger entCoreVersion dans le pom, ou passer l'input entcore_version."; exit 1 ;;
+          esac
           # Branche et commit écrits dans le MANIFEST (SCM-Branch / SCM-Commit-Id), lus par la
           # page « Modules & versions » du dashboard. Sans ces propriétés, la détection par git
           # échoue dès que le HEAD est détaché — cas d'un déclenchement manuel ou d'un tag — et
           # le MANIFEST part avec SCM-Branch: UNKNOWN (constaté sur le jar 4.2.7-patched publié
           # le 2026-07-24). Les variables GitHub, elles, sont toujours justes.
-          mvn clean package -Dmaven.test.skip=true -B $ENTCORE_OPT \
+          mvn clean package -Dmaven.test.skip=true -B -DentCoreVersion="$ENTCORE_EFF" \
             -DbuildNumber="${GITHUB_SHA::8}" -DscmBranch="${GITHUB_REF_NAME}"
         env:
           ENTCORE_VERSION: ${{ github.event.inputs.entcore_version }}
