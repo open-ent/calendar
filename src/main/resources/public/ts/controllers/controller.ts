@@ -1850,7 +1850,9 @@ export const calendarController = ng.controller('CalendarController',
                         $scope.calendarEvent.attachments = [...$scope.calendarEvent.attachments, ...toAdd];
                     }
                     if (duplicates > 0) {
-                        toasts.info(lang.translate('calendar.event.attachment.already.added'));
+                        // Différé : selectDocuments() du media-library lève « $apply already in progress »
+                        // (bug infra-front) qui perturbe le digest courant ; on rend le toast au tick suivant.
+                        $timeout(() => toasts.info(lang.translate('calendar.event.attachment.already.added')));
                     }
                 }
                 $scope.display.attachmentLightbox = false;
