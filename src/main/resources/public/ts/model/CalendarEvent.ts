@@ -53,6 +53,10 @@ export class CalendarEvent implements Selectable, Shareable{
     editAllRecurrence: boolean;
     isMultiDayPart: boolean;
     attachments: Array<Document>;
+    // Ressources du médiacentre attachées (distinctes des attachments workspace, cf toJSON :
+    // les attachments sont forcés à travers Document.toJSON(), incompatible avec la forme
+    // {type, id, name, url, image} d'une ressource médiacentre).
+    resources: Array<any>;
     hasBooking: boolean;
     bookings: Array<SavedBooking|Booking>;
     deleteAllBookings: boolean;
@@ -160,6 +164,7 @@ export class CalendarEvent implements Selectable, Shareable{
             notifStartMoment: this.notifStartMoment.format("DD/MM/YYYY HH:mm"),
             notifEndMoment: this.notifEndMoment.format("DD/MM/YYYY HH:mm"),
             attachments : this.attachments ? this.attachments.map((attachment: Document) => new Document(attachment).toJSON()) : [],
+            resources: this.resources || [],
             bookings: this.bookings,
             hasBooking: this.hasBooking
         }

@@ -240,5 +240,11 @@
   "calendar.type.personal": "Personal",
   "calendar.type.structure": "School",
   "calendar.type.group": "Group",
-  "calendar.type.share.hint": "After saving, choose who to share this calendar with."
+  "calendar.type.share.hint": "After saving, choose who to share this calendar with.",
+  "calendar.event.resources.add.mediacentre": "Add a mediacentre resource",
+  "calendar.event.resources.mediacentre.search": "Search",
+  "calendar.event.resources.mediacentre.search.placeholder": "Search a resource in the mediacentre",
+  "calendar.event.resources.mediacentre.loading": "Searching…",
+  "calendar.event.resources.mediacentre.empty": "Type a term then start the search.",
+  "calendar.event.resources.mediacentre.noresult": "No resource found."
 }

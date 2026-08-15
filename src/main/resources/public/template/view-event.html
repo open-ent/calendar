@@ -43,9 +43,19 @@
                             <i class="attachment"></i>
                             <div ng-click="downloadAttachment(calendarEvent, attachment)"
                                  class="editEvent-attachments-fileSection-list-item-title">
-                                [[attachment.metadata.filename]]
+                                [[decodeFileName(attachment.metadata.filename)]]
                             </div>
-                            <span class="tooltip-title left-spacing-small">[[attachment.metadata.filename]]</span>
+                            <span class="tooltip-title left-spacing-small">[[decodeFileName(attachment.metadata.filename)]]</span>
+                        </div>
+                    </div>
+                    <div ng-repeat="res in calendarEvent.resources"
+                         class="right-spacing three cell bottom-spacing editEvent-attachments-fileSection-list">
+                        <div class="editEvent-attachments-fileSection-list-item ">
+                            <i class="attachment"></i>
+                            <a ng-href="[[res.url]]" target="_blank" class="editEvent-attachments-fileSection-list-item-title">
+                                [[res.name]]
+                            </a>
+                            <span class="tooltip-title left-spacing-small">[[res.name]]</span>
                         </div>
                     </div>
                 </div>

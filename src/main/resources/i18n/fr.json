@@ -239,5 +239,11 @@
   "calendar.type.personal": "Personnel",
   "calendar.type.structure": "Établissement",
   "calendar.type.group": "Groupe",
-  "calendar.type.share.hint": "Après enregistrement, choisissez avec qui partager cet agenda."
+  "calendar.type.share.hint": "Après enregistrement, choisissez avec qui partager cet agenda.",
+  "calendar.event.resources.add.mediacentre": "Ajouter une ressource du médiacentre",
+  "calendar.event.resources.mediacentre.search": "Rechercher",
+  "calendar.event.resources.mediacentre.search.placeholder": "Rechercher une ressource dans le médiacentre",
+  "calendar.event.resources.mediacentre.loading": "Recherche en cours…",
+  "calendar.event.resources.mediacentre.empty": "Saisissez un terme puis lancez la recherche.",
+  "calendar.event.resources.mediacentre.noresult": "Aucune ressource trouvée."
 }

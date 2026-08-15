@@ -1,5 +1,5 @@
 import { IScope } from "angular";
-import { AxiosResponse } from "axios";
+import http, { AxiosResponse } from "axios";
 import { $, _, angular, Document, idiom as lang, moment, ng, notify, template, toasts } from "entcore";
 import { Moment } from "moment";
 import { Subject } from "rxjs";
@@ -1888,6 +1888,85 @@ export const calendarController = ng.controller('CalendarController',
                     }
                 }
                 $scope.display.attachmentLightbox = false;
+            };
+
+            // --- Ressources du médiacentre (recherche) ---
+            const MEDIACENTRE_SOURCES: string[] = [
+                'fr.openent.mediacentre.source.GAR',
+                'fr.openent.mediacentre.source.Signet',
+                'fr.openent.mediacentre.source.Moodle',
+                'fr.openent.mediacentre.source.PMB'
+            ];
+            $scope.mediacentreQuery = '';
+            $scope.mediacentreResources = [];
+            $scope.mediacentreLoading = false;
+            $scope.mediacentreSearched = false;
+
+            $scope.openEventMediacentrePicker = (): void => {
+                $scope.mediacentreQuery = '';
+                $scope.mediacentreResources = [];
+                $scope.mediacentreSearched = false;
+                $scope.display.mediacentrePicker = true;
+            };
+
+            $scope.searchMediacentre = async (queryArg?: string): Promise<void> => {
+                // queryArg = valeur du champ (scope enfant du <lightbox>) ; fallback scope parent.
+                const q: string = ((queryArg != null ? queryArg : $scope.mediacentreQuery) || '').trim();
+                if (!q) { return; }
+                $scope.mediacentreLoading = true;
+                $scope.mediacentreResources = [];
+                safeApply($scope);
+                const jsondata: string = JSON.stringify({
+                    state: 'PLAIN_TEXT', event: 'search',
+                    sources: MEDIACENTRE_SOURCES, data: {query: q}
+                });
+                try {
+                    const {data}: any = await http.get('/mediacentre/search?jsondata=' + encodeURIComponent(jsondata));
+                    const frames: any[] = Array.isArray(data) ? data : [];
+                    const resources: any[] = [];
+                    frames.forEach((f: any) => {
+                        const list: any[] = (f && f.data && Array.isArray(f.data.resources)) ? f.data.resources : [];
+                        list.forEach((r: any) => resources.push(r));
+                    });
+                    $scope.mediacentreResources = resources;
+                } catch (e) {
+                    $scope.mediacentreResources = [];
+                }
+                $scope.mediacentreSearched = true;
+                $scope.mediacentreLoading = false;
+                safeApply($scope);
+            };
+
+            $scope.addEventMediacentreResource = (res: any): void => {
+                if (!$scope.calendarEvent.resources) { $scope.calendarEvent.resources = []; }
+                const id: string = (res.id != null) ? String(res.id) : (res.link || res.title);
+                const already: boolean = $scope.calendarEvent.resources
+                    .some((r: any) => r.type === 'mediacentre' && String(r.id) === String(id));
+                if (already) {
+                    toasts.info(lang.translate('calendar.event.attachment.already.added'));
+                } else if (id) {
+                    $scope.calendarEvent.resources.push({
+                        type: 'mediacentre', id: id,
+                        name: res.title || res.link || id,
+                        url: res.link || res.url || '',
+                        image: res.image || ''
+                    });
+                }
+            };
+
+            $scope.removeEventResource = (index: number): void => {
+                if ($scope.calendarEvent.resources) { $scope.calendarEvent.resources.splice(index, 1); }
+            };
+
+            // Certains documents ont un metadata.filename encodé (ex : "mon%20document.pdf") selon
+            // leur origine d'upload. Décodage défensif (no-op si déjà propre) pour un affichage correct.
+            $scope.decodeFileName = (filename: string): string => {
+                if (!filename) { return filename; }
+                try {
+                    return decodeURIComponent(filename);
+                } catch (e) {
+                    return filename;
+                }
             };
 
             $scope.removeDocumentFromAttachments = (documentId: String): void => {
