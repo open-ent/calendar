@@ -21,6 +21,10 @@ export class Calendar implements Selectable, Shareable {
     icsLink: string;
     platform: string;
     updated: string;
+    // type d'agenda : 'personal' (défaut) | 'structure' (établissement) | 'group' (groupe)
+    type: string;
+    structureId: string;
+    groupId: string;
 
     constructor(calendar?) {
         this.calendarEvents = new CalendarEvents(this);
@@ -29,6 +33,9 @@ export class Calendar implements Selectable, Shareable {
         if (!_.isEmpty(calendar)) {
             this.myRights.fromBehaviours();
             Mix.extend(this, Behaviours.applicationsBehaviours.calendar.resourceRights(calendar));
+            this.type = calendar.type;
+            this.structureId = calendar.structureId;
+            this.groupId = calendar.groupId;
             // calendar.updated['$date'] is a number (timestamp)
             if (calendar.updated && calendar.updated['$date']) {
                 this.updated = DateUtils.getFormattedDate(calendar.updated['$date'], FORMAT.formattedISODate);
@@ -45,7 +52,14 @@ export class Calendar implements Selectable, Shareable {
     };
 
     async create() {
-        let {data} = await http.post('/calendar/calendars', this);
+        // Route vers l'endpoint gaté par le droit workflow correspondant au type d'agenda.
+        let url: string = '/calendar/calendars';
+        if (this.type === 'structure') {
+            url = '/calendar/calendars/structure';
+        } else if (this.type === 'group') {
+            url = '/calendar/calendars/group';
+        }
+        let {data} = await http.post(url, this);
         this._id = data._id;
     };
 
@@ -58,10 +72,14 @@ export class Calendar implements Selectable, Shareable {
     };
 
     toJSON() {
-        return {
+        const json: any = {
             title: this.title,
             color: this.color,
-        }
+        };
+        if (this.type) { json.type = this.type; }
+        if (this.structureId) { json.structureId = this.structureId; }
+        if (this.groupId) { json.groupId = this.groupId; }
+        return json;
     };
 
     async importIcal(icalToInput) {

@@ -192,6 +192,43 @@ public class CalendarController extends MongoDbControllerHelper {
         });
     }
 
+    /**
+     * Création d'un agenda d'établissement. Droit workflow dédié « calendar.structure » (par défaut
+     * aux chefs d'établissement, attribuable aux admins locaux via la console). Le corps porte
+     * type="structure" + structureId ; le partage aux membres de la structure se fait via l'endpoint
+     * de partage existant (PUT /calendar/share/json/:id), réutilisable par n'importe quelle IHM.
+     */
+    @Post("/calendars/structure")
+    @SecuredAction("calendar.structure")
+    @Trace(Actions.CREATE_CALENDAR)
+    public void createStructureCalendar(final HttpServerRequest request) {
+        RequestUtils.bodyToJson(request, pathPrefix + "calendar", object -> {
+            super.create(request, r -> {
+                if (r.succeeded()) {
+                    eventHelper.onCreateResource(request, RESOURCE_NAME);
+                }
+            });
+        });
+    }
+
+    /**
+     * Création d'un agenda de groupe. Droit workflow dédié « calendar.group » (par défaut chefs +
+     * admins + enseignants). Le corps porte type="group" + groupId ; le partage au groupe se fait
+     * via l'endpoint de partage existant, réutilisable par n'importe quelle IHM.
+     */
+    @Post("/calendars/group")
+    @SecuredAction("calendar.group")
+    @Trace(Actions.CREATE_CALENDAR)
+    public void createGroupCalendar(final HttpServerRequest request) {
+        RequestUtils.bodyToJson(request, pathPrefix + "calendar", object -> {
+            super.create(request, r -> {
+                if (r.succeeded()) {
+                    eventHelper.onCreateResource(request, RESOURCE_NAME);
+                }
+            });
+        });
+    }
+
     @Put("/:id")
     @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
     @Trace(Actions.UPDATE_CALENDAR)

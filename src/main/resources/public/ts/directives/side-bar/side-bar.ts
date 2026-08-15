@@ -23,6 +23,10 @@ interface IViewModel {
     hideOtherCalendarCheckboxes(calendar): void;
     isMyCalendar(calendar: Calendar): boolean;
     getCalendarTitle(calendar: Calendar): string;
+    isStructureCalendar(calendar: Calendar): boolean;
+    isGroupCalendar(calendar: Calendar): boolean;
+    hasStructureCalendars(): boolean;
+    hasGroupCalendars(): boolean;
     isExternalCalendar(calendar: Calendar): boolean;
     hasExternalCalendars(): boolean;
     isEmpty(): boolean;
@@ -99,7 +103,8 @@ export const sideBar = ng.directive('sideBar', () =>{
             }
 
             vm.isMyCalendar = (calendar: Calendar) : boolean => {
-                return (calendar.owner.userId == $scope.$parent.me.userId) && !vm.isExternalCalendar(calendar);
+                return (calendar.owner.userId == $scope.$parent.me.userId) && !vm.isExternalCalendar(calendar)
+                    && !vm.isStructureCalendar(calendar) && !vm.isGroupCalendar(calendar);
             }
 
             // Libellé affiché : l'agenda personnel par défaut (auto-créé « Agenda <nom> ») s'affiche
@@ -117,8 +122,17 @@ export const sideBar = ng.directive('sideBar', () =>{
                 return hasSharedCalendars;
             };
 
+            // Agendas d'établissement / de groupe : identifiés par leur champ `type`.
+            vm.isStructureCalendar = (calendar: Calendar) : boolean => !!(calendar && (<any>calendar).type === 'structure');
+            vm.isGroupCalendar = (calendar: Calendar) : boolean => !!(calendar && (<any>calendar).type === 'group');
+            vm.hasStructureCalendars = () : boolean =>
+                vm.calendars.all.some((c: Calendar): boolean => vm.isStructureCalendar(c));
+            vm.hasGroupCalendars = () : boolean =>
+                vm.calendars.all.some((c: Calendar): boolean => vm.isGroupCalendar(c));
+
             vm.isCalendarSharedWithMe = (calendar) : boolean => {
-                return calendar && calendar.shared && calendar.owner.userId != $scope.$parent.me.userId;
+                return calendar && calendar.shared && calendar.owner.userId != $scope.$parent.me.userId
+                    && !vm.isStructureCalendar(calendar) && !vm.isGroupCalendar(calendar);
             };
 
             vm.isExternalCalendar = (calendar: Calendar) : boolean => {

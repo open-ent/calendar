@@ -47,7 +47,9 @@ export const rights = {
         }
     },
     workflow: {
-        admin: 'net.atos.entng.calendar.controllers.CalendarController|createCalendar'
+        admin: 'net.atos.entng.calendar.controllers.CalendarController|createCalendar',
+        createStructureCalendar: 'net.atos.entng.calendar.controllers.CalendarController|createStructureCalendar',
+        createGroupCalendar: 'net.atos.entng.calendar.controllers.CalendarController|createGroupCalendar'
     },
     viewRights: ['net-atos-entng-calendar-controllers-CalendarController|view']
 };

@@ -232,5 +232,7 @@
   "group.school.Teacher": "Enseignants de l'{0}.",
   "import.browse": "Parcourir",
   "calendar.my.own.calendar": "Mon agenda",
-  "calendar.event.attachment.already.added": "Certains documents sont déjà joints : seuls les nouveaux ont été ajoutés."
+  "calendar.event.attachment.already.added": "Certains documents sont déjà joints : seuls les nouveaux ont été ajoutés.",
+  "calendar.structure.calendars": "Agendas de l'établissement",
+  "calendar.group.calendars": "Agendas de groupe"
 }

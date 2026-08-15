@@ -72,6 +72,36 @@
                             </ul>
                             <ul ng-if="!vm.hasSharedCalendars()"><li><i18n>calendar.calendars.empty</i18n></li></ul>
                         </li>
+                        <!-- Structure (établissement) calendars -->
+                        <li ng-if="vm.hasStructureCalendars()">
+                            <h3 class="selected"><i18n>calendar.structure.calendars</i18n></h3>
+                            <ul class="colored">
+                                <li ng-repeat="cl in vm.calendars.all | filter:vm.isStructureCalendar | orderBy: '+title'">
+                                    <a class="[[cl.color]] sidebar-calendar-list" ng-class="{'selected': cl.selected, 'notselected': !cl.selected}"
+                                       ng-click="vm.onOpenOrCloseCalendar(cl, true)">
+                                        <span>[[cl.title]]</span>
+                                        <input ng-if="cl.myRights.manage" type="checkbox" class="calendar-checkbox"
+                                               ng-click="$event.stopPropagation();" ng-model="cl.showButtons" ng-checked="cl.showButtons"
+                                               ng-change="vm.hideOtherCalendarCheckboxes(cl)"/>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        <!-- Group (groupe) calendars -->
+                        <li ng-if="vm.hasGroupCalendars()">
+                            <h3 class="selected"><i18n>calendar.group.calendars</i18n></h3>
+                            <ul class="colored">
+                                <li ng-repeat="cl in vm.calendars.all | filter:vm.isGroupCalendar | orderBy: '+title'">
+                                    <a class="[[cl.color]] sidebar-calendar-list" ng-class="{'selected': cl.selected, 'notselected': !cl.selected}"
+                                       ng-click="vm.onOpenOrCloseCalendar(cl, true)">
+                                        <span>[[cl.title]]</span>
+                                        <input ng-if="cl.myRights.manage" type="checkbox" class="calendar-checkbox"
+                                               ng-click="$event.stopPropagation();" ng-model="cl.showButtons" ng-checked="cl.showButtons"
+                                               ng-change="vm.hideOtherCalendarCheckboxes(cl)"/>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
                         <!-- External calendars -->
                         <li workflow="calendar.admin" ng-if="vm.onCheckExternalCalendarRight('calendar.update')">
                             <ul class="colored">
