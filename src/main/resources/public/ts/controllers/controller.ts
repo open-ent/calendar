@@ -356,6 +356,13 @@ export const calendarController = ng.controller('CalendarController',
                 if (!$scope.calendarEvent.recurrence.end_on) {
                     $scope.calendarEvent.recurrence.end_on = moment($scope.calendarEvent.endMoment).add(1, 'days').hours(0).minutes(0).seconds(0).milliseconds(0);
                 }
+                // end_type (radio "se termine le" / "après N occurrences") est un champ requis du
+                // formulaire mais n'avait aucune valeur par défaut : à l'activation de la récurrence,
+                // le formulaire restait invalide (boutons Enregistrer grisés) sans aucune indication
+                // visuelle, puisque end_on est déjà pré-rempli ci-dessus. On aligne les deux.
+                if (!$scope.calendarEvent.recurrence.end_type) {
+                    $scope.calendarEvent.recurrence.end_type = 'on';
+                }
                 if(!$scope.isOneDayEvent()){
                     $scope.calendarEvent.recurrence.start_on =  moment($scope.calendarEvent.startMoment).add(1, 'days').hours(0).minutes(0).seconds(0).milliseconds(0);
                 }
