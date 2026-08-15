@@ -48,3 +48,11 @@ body.calendar {
 calendar .week-switcher .date-picker-icon {
   margin-left: 0;
 }
+
+// Les notifications (ex : « Ressource ajoutée », doublon détecté) sont rendues avec un
+// z-index inférieur à celui d'une lightbox ouverte (.lightbox = 100030) : elles s'affichent
+// donc bien mais restent invisibles, masquées derrière la modale (picker médiacentre, pièces
+// jointes...). On les fait passer devant, uniquement sur les pages du module calendar.
+.toasts {
+  z-index: 100040;
+}
