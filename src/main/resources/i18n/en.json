@@ -231,5 +231,7 @@
   "group.school.Student": "Students of {0}.",
   "group.school.Teacher": "Teachers of {0}.",
   "import.browse": "Browse",
-  "calendar.has.ben.created": "has been created"
+  "calendar.has.ben.created": "has been created",
+  "calendar.my.own.calendar": "My calendar",
+  "calendar.event.attachment.already.added": "Some documents are already attached: only the new ones were added."
 }

@@ -230,5 +230,7 @@
   "group.school.Relative": "Parents de l'{0}.",
   "group.school.Student": "Élèves de l'{0}.",
   "group.school.Teacher": "Enseignants de l'{0}.",
-  "import.browse": "Parcourir"
+  "import.browse": "Parcourir",
+  "calendar.my.own.calendar": "Mon agenda",
+  "calendar.event.attachment.already.added": "Certains documents sont déjà joints : seuls les nouveaux ont été ajoutés."
 }

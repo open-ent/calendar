@@ -1,4 +1,4 @@
-import {$, ng, toasts} from "entcore";
+import {$, ng, toasts, idiom as lang} from "entcore";
 import {Calendar, Calendars} from "../../model";
 import {ROOTS} from "../../core/const/roots";
 import {Subject} from "rxjs";
@@ -22,6 +22,7 @@ interface IViewModel {
     isCalendarSharedWithMe(calendar): boolean;
     hideOtherCalendarCheckboxes(calendar): void;
     isMyCalendar(calendar: Calendar): boolean;
+    getCalendarTitle(calendar: Calendar): string;
     isExternalCalendar(calendar: Calendar): boolean;
     hasExternalCalendars(): boolean;
     isEmpty(): boolean;
@@ -99,6 +100,16 @@ export const sideBar = ng.directive('sideBar', () =>{
 
             vm.isMyCalendar = (calendar: Calendar) : boolean => {
                 return (calendar.owner.userId == $scope.$parent.me.userId) && !vm.isExternalCalendar(calendar);
+            }
+
+            // Libellé affiché : l'agenda personnel par défaut (auto-créé « Agenda <nom> ») s'affiche
+            // « Mon agenda » pour son propriétaire ; les autres agendas gardent leur titre.
+            vm.getCalendarTitle = (calendar: Calendar) : string => {
+                // « Mon agenda » uniquement si c'est l'agenda par défaut ET qu'il m'appartient
+                // (un agenda par défaut partagé par autrui garde is_default mais doit afficher son titre).
+                return (calendar && (<any>calendar).is_default && vm.isMyCalendar(calendar))
+                    ? lang.translate('calendar.my.own.calendar')
+                    : (calendar ? calendar.title : '');
             }
 
             vm.hasSharedCalendars = () : boolean => {

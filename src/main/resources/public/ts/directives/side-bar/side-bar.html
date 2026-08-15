@@ -46,7 +46,7 @@
                                 <li ng-repeat="cl in vm.calendars.all | filter:vm.isMyCalendar | orderBy: '+title'">
                                     <a class="[[cl.color]]" ng-class="{'selected': cl.selected, 'notselected': !cl.selected}"
                                        ng-click="vm.onOpenOrCloseCalendar(cl, true)">
-                                        <span>[[cl.title]]</span>
+                                        <span>[[vm.getCalendarTitle(cl)]]</span>
                                         <input type="checkbox" class="calendar-checkbox" ng-click="$event.stopPropagation();"
                                                ng-model="cl.showButtons" ng-checked="cl.showButtons" ng-change="vm.hideOtherCalendarCheckboxes(cl)"/>
                                     </a>
@@ -60,7 +60,7 @@
                                 <li ng-repeat="cl in vm.calendars.all | filter:vm.isCalendarSharedWithMe | orderBy: '+title'">
                                     <a class="[[cl.color]] sidebar-calendar-list" ng-class="{'selected': cl.selected, 'notselected': !cl.selected}"
                                        ng-click="vm.onOpenOrCloseCalendar(cl, true)">
-                                        <span>[[cl.title]]</span>
+                                        <span>[[vm.getCalendarTitle(cl)]]</span>
                                         <input ng-if="cl.myRights.manage" type="checkbox" class="calendar-checkbox"
                                                ng-click="$event.stopPropagation();" ng-model="cl.showButtons" ng-checked="cl.showButtons"
                                                ng-change="vm.hideOtherCalendarCheckboxes(cl)"/>

@@ -1832,7 +1832,26 @@ export const calendarController = ng.controller('CalendarController',
                 $scope.eventDocuments = angular.element(document.getElementsByTagName("media-library")).scope();
                 $scope.calendarEvent.attachments = $scope.calendarEvent.attachments ? $scope.calendarEvent.attachments : [];
                 if ($scope.eventDocuments.documents) {
-                    $scope.calendarEvent.attachments = [...$scope.calendarEvent.attachments, ...$scope.eventDocuments.documents];
+                    // Anti-doublon : on n'ajoute pas une pièce jointe déjà présente (même _id).
+                    // On ajoute les nouvelles et on signale (toast) celles déjà attachées.
+                    const existingIds: Array<string> = $scope.calendarEvent.attachments.map((a: Document) => a._id);
+                    const toAdd: Array<Document> = [];
+                    let duplicates: number = 0;
+                    $scope.eventDocuments.documents.forEach((doc: Document) => {
+                        const alreadyThere: boolean = existingIds.indexOf(doc._id) !== -1
+                            || toAdd.some((d: Document) => d._id === doc._id);
+                        if (alreadyThere) {
+                            duplicates++;
+                        } else {
+                            toAdd.push(doc);
+                        }
+                    });
+                    if (toAdd.length) {
+                        $scope.calendarEvent.attachments = [...$scope.calendarEvent.attachments, ...toAdd];
+                    }
+                    if (duplicates > 0) {
+                        toasts.info(lang.translate('calendar.event.attachment.already.added'));
+                    }
                 }
                 $scope.display.attachmentLightbox = false;
             };
