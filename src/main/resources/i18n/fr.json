@@ -234,5 +234,10 @@
   "calendar.my.own.calendar": "Mon agenda",
   "calendar.event.attachment.already.added": "Certains documents sont déjà joints : seuls les nouveaux ont été ajoutés.",
   "calendar.structure.calendars": "Agendas de l'établissement",
-  "calendar.group.calendars": "Agendas de groupe"
+  "calendar.group.calendars": "Agendas de groupe",
+  "calendar.type": "Type d'agenda",
+  "calendar.type.personal": "Personnel",
+  "calendar.type.structure": "Établissement",
+  "calendar.type.group": "Groupe",
+  "calendar.type.share.hint": "Après enregistrement, choisissez avec qui partager cet agenda."
 }

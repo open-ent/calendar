@@ -4,6 +4,7 @@ import { $, _, angular, Document, idiom as lang, moment, ng, notify, template, t
 import { Moment } from "moment";
 import { Subject } from "rxjs";
 import { FORMAT } from "../core/const/date-format";
+import { rights } from "../model/constantes/RIGHTS";
 import { RBS_SNIPLET } from "../core/const/rbs-sniplet.const";
 import { DAY_OF_WEEK } from "../core/enum/dayOfWeek.enum";
 import { PERIODE_TYPE } from "../core/enum/period-type.enum";
@@ -752,10 +753,30 @@ export const calendarController = ng.controller('CalendarController',
                 }
             };
 
+            // Droits de création des agendas typés (workflow, distribués via la console).
+            $scope.canCreateStructureCalendar = (): boolean => model.me.hasWorkflow(rights.workflow.createStructureCalendar);
+            $scope.canCreateGroupCalendar = (): boolean => model.me.hasWorkflow(rights.workflow.createGroupCalendar);
+
+            // Au changement de type dans le formulaire : renseigner structureId pour un agenda
+            // d'établissement (structure courante par défaut) et nettoyer les champs non pertinents.
+            $scope.onChangeCalendarType = (): void => {
+                if ($scope.calendar.type === 'structure') {
+                    $scope.calendar.structureId = (model.me.structures && model.me.structures.length)
+                        ? model.me.structures[0] : undefined;
+                    $scope.calendar.groupId = undefined;
+                } else if ($scope.calendar.type === 'group') {
+                    $scope.calendar.structureId = undefined;
+                } else {
+                    $scope.calendar.structureId = undefined;
+                    $scope.calendar.groupId = undefined;
+                }
+            };
+
             $scope.newCalendar = function () {
                 $scope.calendarCreationScreen = true;
                 $scope.calendar = new Calendar();
                 $scope.calendar.color = defaultColor;
+                $scope.calendar.type = 'personal';
                 template.open('calendar', 'edit-calendar');
             };
 
@@ -1035,11 +1056,22 @@ export const calendarController = ng.controller('CalendarController',
                     $scope.calendarEvents.applyFilters();
 
                 } else {
+                    const createdType: string = $scope.calendar.type;
                     await $scope.calendar.save();
                     handleCalendarDisplay($scope.calendar);
                     await $scope.updateCalendars();
                     $scope.loadCalendarEvents();
                     $scope.display.showToggleButtons = false;
+                    // Agenda établissement/groupe : enchaîner sur le partage (share-panel complet)
+                    // pour le rendre visible aux membres de la structure / du groupe.
+                    if (createdType === 'structure' || createdType === 'group') {
+                        const created: Calendar = $scope.calendars.all.find((c: Calendar) => c._id === $scope.calendar._id);
+                        if (created) { $scope.calendar = created; }
+                        $scope.calendarCreationScreen = false;
+                        $scope.display.showPanelCalendar = true;
+                        safeApply($scope);
+                        return;
+                    }
                 }
                 safeApply($scope);
                 $scope.showCalendar();
