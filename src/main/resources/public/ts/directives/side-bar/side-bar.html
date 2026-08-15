@@ -73,9 +73,9 @@
                             <ul ng-if="!vm.hasSharedCalendars()"><li><i18n>calendar.calendars.empty</i18n></li></ul>
                         </li>
                         <!-- Structure (établissement) calendars -->
-                        <li ng-if="vm.hasStructureCalendars()">
+                        <li>
                             <h3 class="selected"><i18n>calendar.structure.calendars</i18n></h3>
-                            <ul class="colored">
+                            <ul ng-if="vm.hasStructureCalendars()" class="colored">
                                 <li ng-repeat="cl in vm.calendars.all | filter:vm.isStructureCalendar | orderBy: '+title'">
                                     <a class="[[cl.color]] sidebar-calendar-list" ng-class="{'selected': cl.selected, 'notselected': !cl.selected}"
                                        ng-click="vm.onOpenOrCloseCalendar(cl, true)">
@@ -86,11 +86,12 @@
                                     </a>
                                 </li>
                             </ul>
+                            <ul ng-if="!vm.hasStructureCalendars()"><li><i18n>calendar.calendars.empty</i18n></li></ul>
                         </li>
                         <!-- Group (groupe) calendars -->
-                        <li ng-if="vm.hasGroupCalendars()">
+                        <li>
                             <h3 class="selected"><i18n>calendar.group.calendars</i18n></h3>
-                            <ul class="colored">
+                            <ul ng-if="vm.hasGroupCalendars()" class="colored">
                                 <li ng-repeat="cl in vm.calendars.all | filter:vm.isGroupCalendar | orderBy: '+title'">
                                     <a class="[[cl.color]] sidebar-calendar-list" ng-class="{'selected': cl.selected, 'notselected': !cl.selected}"
                                        ng-click="vm.onOpenOrCloseCalendar(cl, true)">
@@ -101,6 +102,7 @@
                                     </a>
                                 </li>
                             </ul>
+                            <ul ng-if="!vm.hasGroupCalendars()"><li><i18n>calendar.calendars.empty</i18n></li></ul>
                         </li>
                         <!-- External calendars -->
                         <li workflow="calendar.admin" ng-if="vm.onCheckExternalCalendarRight('calendar.update')">
