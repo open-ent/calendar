@@ -246,5 +246,6 @@
   "calendar.event.resources.mediacentre.search.placeholder": "Search a resource in the mediacentre",
   "calendar.event.resources.mediacentre.loading": "Searching…",
   "calendar.event.resources.mediacentre.empty": "Type a term then start the search.",
-  "calendar.event.resources.mediacentre.noresult": "No resource found."
+  "calendar.event.resources.mediacentre.noresult": "No resource found.",
+  "calendar.event.resources.mediacentre.added": "Resource added."
 }

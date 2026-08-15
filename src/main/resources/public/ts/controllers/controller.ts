@@ -1951,6 +1951,9 @@ export const calendarController = ng.controller('CalendarController',
                         url: res.link || res.url || '',
                         image: res.image || ''
                     });
+                    // La lightbox reste ouverte (pour ajouter plusieurs ressources d'affilée) : sans
+                    // ce toast, l'ajout est invisible car la liste résultante est masquée derrière elle.
+                    toasts.confirm(lang.translate('calendar.event.resources.mediacentre.added'));
                 }
             };
 
