@@ -163,7 +163,16 @@ export class CalendarEvent implements Selectable, Shareable{
             // Warning : if format() is changed below, it must be changed in net.atos.entng.calendar.helpers.EventHelper.create() too.
             notifStartMoment: this.notifStartMoment.format("DD/MM/YYYY HH:mm"),
             notifEndMoment: this.notifEndMoment.format("DD/MM/YYYY HH:mm"),
-            attachments : this.attachments ? this.attachments.map((attachment: Document) => new Document(attachment).toJSON()) : [],
+            // Une pièce jointe relue du serveur a déjà owner:{userId,displayName}. La refaire passer
+            // par new Document(attachment) réemboîte owner.userId (déjà un objet) dans un nouveau
+            // niveau -> owner.userId.userId.userId... grandit à chaque enregistrement successif du
+            // même événement (ex : récurrence) jusqu'à faire planter le backend (500). On ne
+            // ré-sérialise que les pièces jointes réellement neuves (owner encore une chaîne brute).
+            attachments : this.attachments ? this.attachments.map((attachment: any) => {
+                const alreadySerialized: boolean = attachment && attachment.owner
+                    && typeof attachment.owner === 'object' && typeof attachment.owner.userId === 'string';
+                return alreadySerialized ? attachment : new Document(attachment).toJSON();
+            }) : [],
             resources: this.resources || [],
             bookings: this.bookings,
             hasBooking: this.hasBooking
