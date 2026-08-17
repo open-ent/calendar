@@ -173,7 +173,13 @@ export class CalendarEvent implements Selectable, Shareable{
                     && typeof attachment.owner === 'object' && typeof attachment.owner.userId === 'string';
                 return alreadySerialized ? attachment : new Document(attachment).toJSON();
             }) : [],
-            resources: this.resources || [],
+            // MongoDB interdit les noms de champ préfixés par "$" dans un document stocké. Angular
+            // ajoute automatiquement `$$hashKey` aux objets utilisés dans un ng-repeat (ex : la liste
+            // de résultats de recherche du picker médiacentre) -> ce champ parasite finit dans le
+            // payload et fait planter la sauvegarde (500). On ne renvoie que les champs attendus.
+            resources: (this.resources || []).map((r: any) => ({
+                type: r.type, id: r.id, name: r.name, url: r.url, image: r.image
+            })),
             bookings: this.bookings,
             hasBooking: this.hasBooking
         }
