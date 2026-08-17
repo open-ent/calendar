@@ -171,7 +171,14 @@ export class CalendarEvent implements Selectable, Shareable{
             attachments : this.attachments ? this.attachments.map((attachment: any) => {
                 const alreadySerialized: boolean = attachment && attachment.owner
                     && typeof attachment.owner === 'object' && typeof attachment.owner.userId === 'string';
-                return alreadySerialized ? attachment : new Document(attachment).toJSON();
+                if (alreadySerialized) {
+                    // Ne pas re-sérialiser (voir ci-dessus), mais quand même exclure $$hashKey
+                    // (Angular, ng-repeat de la liste des pièces jointes) : MongoDB refuse aussi
+                    // ce préfixe "$" sur ce champ.
+                    const {$$hashKey, ...clean} = attachment;
+                    return clean;
+                }
+                return new Document(attachment).toJSON();
             }) : [],
             // MongoDB interdit les noms de champ préfixés par "$" dans un document stocké. Angular
             // ajoute automatiquement `$$hashKey` aux objets utilisés dans un ng-repeat (ex : la liste
