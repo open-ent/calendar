@@ -1320,8 +1320,21 @@ export const calendarController = ng.controller('CalendarController',
                     }
                 });
             $scope.calendarAsContribRight = unique($scope.calendarAsContribRight);
-            let defaultCalendar: Calendar = $scope.calendarAsContribRight.find(cal => cal.is_default == true);
-            $scope.selectedCalendarInEvent.push(defaultCalendar ? defaultCalendar : $scope.calendarAsContribRight[0]);
+            // Pré-coche, dans le multi-combo du formulaire, TOUS les agendas actuellement
+            // sélectionnés (cl.selected, cf side-bar.html — pas la case à cocher secondaire
+            // showButtons/hideOtherCalendarCheckboxes qui ne fait qu'afficher les icônes
+            // d'action) parmi ceux où l'utilisateur a un droit de contribution. L'événement sera
+            // alors créé dans chacun d'eux (changeCalendarEventCalendar + CalendarEvent.create).
+            // Sans agenda sélectionné avec droit de contribution, on retombe sur l'agenda
+            // personnel par défaut.
+            const selected: Calendar[] = $scope.calendars.selected
+                .filter((cal: Calendar) => $scope.calendarAsContribRight.some((c: Calendar) => c._id === cal._id));
+            if (selected.length > 0) {
+                selected.forEach((cal: Calendar) => $scope.selectedCalendarInEvent.push(cal));
+            } else {
+                let defaultCalendar: Calendar = $scope.calendarAsContribRight.find(cal => cal.is_default == true);
+                $scope.selectedCalendarInEvent.push(defaultCalendar ? defaultCalendar : $scope.calendarAsContribRight[0]);
+            }
             $scope.selectedCalendarInEvent = unique($scope.selectedCalendarInEvent);
         }
 

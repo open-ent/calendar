@@ -100,8 +100,15 @@ export class CalendarEvent implements Selectable, Shareable{
 
     async create(){
         this.editDateBeforeSend(true);
-        let {data : {_id : id}} = await http.post('/calendar/' + this.calendar[0]._id + '/events', this.toJSON());
-        this._id = id;
+        const body = this.toJSON();
+        // Le backend ne crée l'événement que dans le calendrier de l'URL (:id) — body.calendar
+        // (rempli par getCalendarId(), potentiellement plusieurs agendas cochés dans le multi-combo
+        // du formulaire) n'y sert qu'à une vérification "aucun agenda externe", pas à une création
+        // multiple. Si plusieurs agendas sont sélectionnés, on poste donc une copie par agenda.
+        const results = await Promise.all(
+            this.calendar.map((calendar) => http.post('/calendar/' + calendar._id + '/events', body))
+        );
+        this._id = results[0].data._id;
     };
 
     async update(){
