@@ -24,7 +24,7 @@ importers:
         specifier: 2.4.1
         version: 2.4.1
       entcore:
-        specifier: dev
+        specifier: 4.8.17-dev.202607271230
         version: 4.8.17-dev.202607271230(lodash@4.17.23)
       entcore-toolkit:
         specifier: 1.0.1
