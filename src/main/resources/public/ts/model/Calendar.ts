@@ -31,7 +31,6 @@ export class Calendar implements Selectable, Shareable {
         this.myRights = new Rights(this);
         this.selected = false;
         if (!_.isEmpty(calendar)) {
-            this.myRights.fromBehaviours();
             Mix.extend(this, Behaviours.applicationsBehaviours.calendar.resourceRights(calendar));
             this.type = calendar.type;
             this.structureId = calendar.structureId;

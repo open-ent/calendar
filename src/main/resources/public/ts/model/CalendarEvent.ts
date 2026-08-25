@@ -74,7 +74,6 @@ export class CalendarEvent implements Selectable, Shareable{
             for (let key in calendarEvent){
                 if(typeof calendarEvent[key] !== "function") this[key] = calendarEvent[key];
             }
-            this.myRights.fromBehaviours();
         }
     }
 
