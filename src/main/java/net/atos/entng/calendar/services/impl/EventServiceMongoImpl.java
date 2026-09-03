@@ -157,6 +157,15 @@ public class EventServiceMongoImpl extends MongoDbCrudService implements EventSe
         return promise.future();
     }
 
+    @Override
+    public void listPublic(String calendarId, final Handler<Either<String, JsonArray>> handler) {
+        JsonObject queryEvent = new JsonObject().put(Field.CALENDAR, calendarId);
+        JsonObject sort = new JsonObject().put("modified", -1);
+        JsonObject projection = new JsonObject();
+
+        mongo.find(this.collection, queryEvent, sort, projection, validResultsHandler(handler));
+    }
+
     public JsonArray fetchEventsWithDates(String startDate, String endDate) {
         JsonArray eventsFilterByDate = new JsonArray();
 

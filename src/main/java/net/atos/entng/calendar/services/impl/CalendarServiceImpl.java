@@ -298,4 +298,32 @@ public class CalendarServiceImpl implements CalendarService {
         }));
         return promise.future();
     }
+
+    @Override
+    public Future<Void> setPortalPublication(String calendarId, boolean published, String userId) {
+        Promise<Void> promise = Promise.promise();
+        final Bson query = eq(Field._ID, calendarId);
+
+        MongoUpdateBuilder modifier = new MongoUpdateBuilder();
+        modifier.set(Field.PORTALPUBLISHED, published);
+        if (published) {
+            modifier.set(Field.PORTALPUBLISHEDBY, userId);
+            modifier.set(Field.PORTALPUBLISHEDAT, MongoDb.now());
+        } else {
+            modifier.unset(Field.PORTALPUBLISHEDBY);
+            modifier.unset(Field.PORTALPUBLISHEDAT);
+        }
+
+        mongo.update(this.collection, MongoQueryBuilder.build(query), modifier.build(), validResultHandler(result -> {
+            if (result.isLeft()) {
+                log.error("[Calendar@CalendarService::setPortalPublication]: an error has occurred while updating calendar: ",
+                        result.left().getValue());
+                promise.fail(result.left().getValue());
+            } else {
+                promise.complete();
+            }
+        }));
+
+        return promise.future();
+    }
 }

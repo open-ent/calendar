@@ -184,6 +184,17 @@ public class EventController extends MongoDbControllerHelper {
         eventHelper.importIcal(request);
     }
 
+    /**
+     * Flux ICS public d'un agenda d'établissement publié sur le portail (portalPublished=true).
+     * Route volontairement dépourvue de @SecuredAction (comme PagesController#getPublic) :
+     * accessible sans authentification, pour être consommée par un plugin calendrier WordPress.
+     */
+    @Get("/pub/:id/events.ics")
+    @ApiDoc("Get public ICS feed of a structure calendar published on the public portal.")
+    public void getPublicIcal(HttpServerRequest request) {
+        eventHelper.getPublicIcal(request);
+    }
+
     @Get("calendarevent/:eventid/attachment/:attachmentid")
     @SecuredAction(value = "calendar.read", type = ActionType.AUTHENTICATED)
     public void getEventAttachment(HttpServerRequest request) {

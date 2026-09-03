@@ -23,6 +23,8 @@ public class Actions {
     public static final String SYNC_EXTERNAL_CALENDAR = "SYNC_EXTERNAL_CALENDAR";
     public static final String IMPORT_EXTERNAL_CALENDAR = "IMPORT_EXTERNAL_CALENDAR";
     public static final String CHECK_EXTERNAL_CALENDAR = "CHECK_EXTERNAL_CALENDAR";
+    public static final String PORTAL_PUBLISH_CALENDAR = "PORTAL_PUBLISH_CALENDAR";
+    public static final String PORTAL_UNPUBLISH_CALENDAR = "PORTAL_UNPUBLISH_CALENDAR";
 
     public static final String CREATE_PLATFORM = "CREATE_PLATFORM";
     public static final String DELETE_PLATFORM = "DELETE_PLATFORM";

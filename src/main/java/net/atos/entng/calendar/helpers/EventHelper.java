@@ -521,6 +521,49 @@ public class EventHelper extends MongoDbControllerHelper {
     }
 
 
+    /**
+     * Flux ICS public (anonyme, aucune vérification d'auth) d'un agenda d'établissement
+     * explicitement publié sur le portail public (portalPublished=true). Tous les événements du
+     * calendrier sont exposés sans filtrage par partage, contrairement à {@link #getIcal}.
+     */
+    public void getPublicIcal(final HttpServerRequest request) {
+        final String calendarId = request.params().get(CALENDAR_ID_PARAMETER);
+        calendarService.checkBooleanField(calendarId, Field.PORTALPUBLISHED)
+                .onSuccess(isPublished -> {
+                    if (!Boolean.TRUE.equals(isPublished)) {
+                        notFound(request);
+                        return;
+                    }
+                    eventService.listPublic(calendarId, event -> {
+                        if (event.isLeft()) {
+                            renderError(request);
+                            return;
+                        }
+                        JsonObject message = new JsonObject()
+                                .put("action", net.atos.entng.calendar.ical.ICalHandler.ACTION_GET)
+                                .put("events", event.right().getValue());
+                        eb.request(net.atos.entng.calendar.ical.ICalHandler.ICAL_HANDLER_ADDRESS, message, reply -> {
+                            if (reply.failed()) {
+                                renderError(request);
+                                return;
+                            }
+                            JsonObject response = (JsonObject) reply.result().body();
+                            String content = response.getString("ics");
+                            try {
+                                File f = File.createTempFile(calendarId, "ics");
+                                Files.write(Paths.get(f.getAbsolutePath()), content.getBytes());
+                                request.response().putHeader("Content-Type", "text/calendar; charset=utf-8");
+                                request.response().sendFile(f.getAbsolutePath());
+                            } catch (IOException e) {
+                                log.error("[Calendar@EventHelper::getPublicIcal] Failed to write ICS file", e);
+                                renderError(request);
+                            }
+                        });
+                    });
+                })
+                .onFailure(err -> renderError(request));
+    }
+
     public void importIcal(final HttpServerRequest request) {
         UserUtils.getUserInfos(eb, request, new Handler<UserInfos>() {
             @Override

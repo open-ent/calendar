@@ -25,6 +25,8 @@ export class Calendar implements Selectable, Shareable {
     type: string;
     structureId: string;
     groupId: string;
+    // Publication sur le portail public (flux ICS anonyme) — réservé aux agendas de type 'structure'.
+    portalPublished: boolean;
 
     constructor(calendar?) {
         this.calendarEvents = new CalendarEvents(this);
@@ -35,6 +37,7 @@ export class Calendar implements Selectable, Shareable {
             this.type = calendar.type;
             this.structureId = calendar.structureId;
             this.groupId = calendar.groupId;
+            this.portalPublished = calendar.portalPublished === true;
             // calendar.updated['$date'] is a number (timestamp)
             if (calendar.updated && calendar.updated['$date']) {
                 this.updated = DateUtils.getFormattedDate(calendar.updated['$date'], FORMAT.formattedISODate);
@@ -69,6 +72,21 @@ export class Calendar implements Selectable, Shareable {
     async delete() {
         await http.delete('/calendar/' + this._id);
     };
+
+    /** URL publique (anonyme) du flux ICS — valide uniquement une fois {@link portalPublished} à true. */
+    get portalPublicUrl(): string {
+        return window.location.origin + '/calendar/pub/' + this._id + '/events.ics';
+    }
+
+    async portalPublish() {
+        await http.put('/calendar/' + this._id + '/portal-publish');
+        this.portalPublished = true;
+    }
+
+    async portalUnpublish() {
+        await http.delete('/calendar/' + this._id + '/portal-publish');
+        this.portalPublished = false;
+    }
 
     toJSON() {
         const json: any = {

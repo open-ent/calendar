@@ -60,10 +60,46 @@
                             ng-click="shareCalendar(showButtonsCalendar, $event)">
                         <i18n>share</i18n>
                     </button>
+                    <button ng-if="showButtonsCalendar.type === 'structure'"
+                            ng-click="openPortalPublish(showButtonsCalendar, $event)">
+                        <i18n>calendar.portalpublish.title</i18n>
+                    </button>
             </authorize>
         </div>
     </div>
 </section>
+
+<!-- Lightbox : Publish calendar on public portal -->
+<div ng-if="display.showPanelPortalPublish">
+    <lightbox show="display.showPanelPortalPublish" on-close="closePortalPublish();">
+        <div class="row">
+            <h2 class="subtitle"><i18n>calendar.portalpublish.title</i18n></h2>
+            <div class="row" ng-if="!calendar.portalPublished">
+                <p><i18n>calendar.portalpublish.url.help</i18n></p>
+            </div>
+            <div class="row" ng-if="calendar.portalPublished">
+                <p>✓ <i18n>calendar.portalpublish.published</i18n></p>
+                <div class="row">
+                    <input type="text" readonly class="twelve" ng-value="calendar.portalPublicUrl" onclick="this.select()"
+                           id="portalPublishUrlField"/>
+                    <button type="button" ng-click="document.execCommand('copy')"
+                            ng-mousedown="document.getElementById('portalPublishUrlField').select()">
+                        <i18n>copy</i18n>
+                    </button>
+                </div>
+            </div>
+            <div class="lightbox-buttons fluid">
+                <button type="button" class="right-magnet" ng-if="!calendar.portalPublished" ng-click="togglePortalPublish()">
+                    <i18n>calendar.portalpublish.title</i18n>
+                </button>
+                <button type="button" class="right-magnet" ng-if="calendar.portalPublished" ng-click="togglePortalPublish()">
+                    <i18n>calendar.portalpublish.unpublish</i18n>
+                </button>
+                <button type="button" class="cancel right-magnet" ng-click="closePortalPublish()"><i18n>cancel</i18n></button>
+            </div>
+        </div>
+    </lightbox>
+</div>
 
 <!-- Action buttons for calendar events -->
 <section class="toggle-buttons" ng-class="{ hide: calendarEvents.selected.length === 0 || !display.list}">

@@ -34,6 +34,12 @@ public interface EventServiceMongo {
 
     void list(String calendarId, UserInfos user, Handler<Either<String, JsonArray>> handler);
 
+    /**
+     * Fetch all events of a calendar with no owner/shared filtering — used for the anonymous
+     * public ICS feed of a structure calendar published on the portal (portalPublished=true).
+     */
+    void listPublic(String calendarId, Handler<Either<String, JsonArray>> handler);
+
     void list(String calendarId, UserInfos user,  String startDate, String endDate, Handler<Either<String, JsonArray>> handler);
 
     Future<JsonArray> list(String calendarId, UserInfos user,  String startDate, String endDate);

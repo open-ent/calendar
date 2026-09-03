@@ -1197,6 +1197,30 @@ export const calendarController = ng.controller('CalendarController',
                 event.stopPropagation();
             };
 
+            /** Publication/dépublication d'un agenda d'établissement sur le portail public (flux ICS anonyme). */
+            $scope.openPortalPublish = function (calendar, event) {
+                $scope.calendar = calendar;
+                $scope.display.showPanelPortalPublish = true;
+                event.stopPropagation();
+            };
+
+            $scope.closePortalPublish = function () {
+                $scope.display.showPanelPortalPublish = false;
+            };
+
+            $scope.togglePortalPublish = async function () {
+                try {
+                    if ($scope.calendar.portalPublished) {
+                        await $scope.calendar.portalUnpublish();
+                    } else {
+                        await $scope.calendar.portalPublish();
+                    }
+                } catch (err) {
+                    toasts.warning(lang.translate('calendar.portalpublish.error'));
+                }
+                safeApply($scope);
+            };
+
             $scope.shareEvent = function (calendarEvent, event) {
                 $scope.calendarEvent = calendarEvent;
                 $scope.display.showPanelEvent = true;

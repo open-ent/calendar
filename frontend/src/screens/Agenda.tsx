@@ -7,6 +7,7 @@ import { api, Calendar, CalendarEvent } from '../api';
 import { calendarColor, isoTime, isSameDay, isSameMonth, monthGrid, startOfWeek, weekDays } from '../utils';
 import { CalendarDialog } from './CalendarDialog';
 import { EventDialog } from './EventDialog';
+import { PortalPublishDialog } from './PortalPublishDialog';
 import { ShareDialog } from './ShareDialog';
 
 const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -74,6 +75,7 @@ export function Agenda() {
   });
   const [calendarDialog, setCalendarDialog] = useState<CalendarDialogState>(null);
   const [shareDialog, setShareDialog] = useState<ShareDialogState>(null);
+  const [portalPublishDialog, setPortalPublishDialog] = useState<Calendar | null>(null);
 
   const deleteCalMut = useMutation({
     mutationFn: (id: string) => api.deleteCalendar(id),
@@ -152,6 +154,7 @@ export function Agenda() {
           onClose={() => setShareDialog(null)}
         />
       )}
+      {portalPublishDialog && <PortalPublishDialog calendar={portalPublishDialog} onClose={() => setPortalPublishDialog(null)} />}
 
       <div className="d-flex align-items-center justify-content-between mb-16">
         <h1 className="m-0">{t('calendar.title', { defaultValue: 'Agenda' })}</h1>
@@ -179,6 +182,11 @@ export function Agenda() {
                   {c.title}
                 </label>
                 <span className="d-flex gap-4">
+                  {c.type === 'structure' && (
+                    <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.portalpublish.title', { defaultValue: 'Publier sur le portail public' })} ${c.title}`} onClick={() => setPortalPublishDialog(c)}>
+                      🌐
+                    </button>
+                  )}
                   <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} ${c.title}`} onClick={() => setShareDialog({ resourceId: c._id, resourceName: c.title, title: t('calendar.share.title', { defaultValue: 'Partager le calendrier' }), kind: 'calendar' })}>
                     ⇄
                   </button>
@@ -208,13 +216,18 @@ export function Agenda() {
                 <li className="text-muted" style={{ fontSize: 13 }}>{t('calendar.shared.none', { defaultValue: "Pas d'agenda" })}</li>
               )}
               {calendars.filter((c) => !c.isExternal && myUserId && c.owner?.userId !== myUserId).map((c) => (
-                <li key={c._id} className="py-4">
+                <li key={c._id} className="d-flex align-items-center justify-content-between py-4">
                   <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
                     <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
                     <span aria-hidden style={{ width: 12, height: 12, borderRadius: 3, background: calendarColor(c.color), display: 'inline-block' }} />
                     {c.title}
                     {c.owner?.displayName && <span className="text-muted" style={{ fontSize: 12 }}>({c.owner.displayName})</span>}
                   </label>
+                  {c.type === 'structure' && (
+                    <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.portalpublish.title', { defaultValue: 'Publier sur le portail public' })} ${c.title}`} onClick={() => setPortalPublishDialog(c)}>
+                      🌐
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

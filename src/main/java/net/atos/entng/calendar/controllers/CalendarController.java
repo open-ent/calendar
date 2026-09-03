@@ -43,6 +43,7 @@ import net.atos.entng.calendar.helpers.CalendarHelper;
 import net.atos.entng.calendar.helpers.EventBusHelper;
 import net.atos.entng.calendar.helpers.PlatformHelper;
 import net.atos.entng.calendar.models.CalendarModel;
+import net.atos.entng.calendar.security.AdminOfCalendarStructure;
 import net.atos.entng.calendar.security.ShareEventConf;
 import net.atos.entng.calendar.services.CalendarService;
 import net.atos.entng.calendar.services.EventServiceMongo;
@@ -373,6 +374,43 @@ public class CalendarController extends MongoDbControllerHelper {
                             err.getMessage());
                     Renders.renderError(request);
                 });
+    }
+
+    /**
+     * Publie l'agenda d'établissement sur le portail public : ses événements deviennent
+     * accessibles sans authentification via le flux ICS anonyme {@code GET /pub/:id/events.ics}.
+     * Réservé à un ADML de la structure propriétaire de l'agenda (ou super-admin), cf.
+     * {@link AdminOfCalendarStructure}.
+     */
+    @Put("/:id/portal-publish")
+    @ApiDoc("Publish a structure calendar's events as a public ICS feed on the school's public portal.")
+    @ResourceFilter(AdminOfCalendarStructure.class)
+    @SecuredAction(value = Rights.PORTAL_PUBLISH, type = ActionType.RESOURCE)
+    @Trace(Actions.PORTAL_PUBLISH_CALENDAR)
+    public void portalPublish(final HttpServerRequest request) {
+        final String id = request.params().get(Field.ID);
+        UserUtils.getUserInfos(eb, request, user -> {
+            if (user == null) {
+                unauthorized(request);
+                return;
+            }
+            calendarService.setPortalPublication(id, true, user.getUserId())
+                    .onSuccess(res -> Renders.ok(request))
+                    .onFailure(err -> renderError(request));
+        });
+    }
+
+    /** Dépublie l'agenda d'établissement du portail public. Même garde que {@link #portalPublish}. */
+    @Delete("/:id/portal-publish")
+    @ApiDoc("Unpublish a structure calendar from the public portal.")
+    @ResourceFilter(AdminOfCalendarStructure.class)
+    @SecuredAction(value = Rights.PORTAL_PUBLISH, type = ActionType.RESOURCE)
+    @Trace(Actions.PORTAL_UNPUBLISH_CALENDAR)
+    public void portalUnpublish(final HttpServerRequest request) {
+        final String id = request.params().get(Field.ID);
+        calendarService.setPortalPublication(id, false, null)
+                .onSuccess(res -> Renders.ok(request))
+                .onFailure(err -> renderError(request));
     }
 
     @Get("/share/json/:id")

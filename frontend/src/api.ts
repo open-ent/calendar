@@ -14,6 +14,10 @@ export interface Calendar {
   /** Agenda externe : alimenté par un flux ICS (icsLink), synchronisé côté serveur. */
   isExternal?: boolean;
   icsLink?: string;
+  /** "structure" pour un agenda d'établissement (POST /calendar/calendars/structure). */
+  type?: string;
+  /** Publication sur le portail public (flux ICS anonyme GET /calendar/pub/:id/events.ics). */
+  portalPublished?: boolean;
 }
 
 /** Un événement. Dates ISO (UTC) dans `startMoment`/`endMoment`. */
@@ -110,6 +114,19 @@ export const deleteCalendar = async (id: string): Promise<void> => {
   if (!res.ok && res.status !== 204) throw new Error(String(res.status));
 };
 
+/** URL publique (anonyme) du flux ICS d'un agenda publié sur le portail — à coller dans WordPress. */
+export const publicIcalUrl = (calendarId: string): string => `${window.location.origin}/calendar/pub/${calendarId}/events.ics`;
+
+export const publishCalendarPortal = async (id: string): Promise<void> => {
+  const res = await fetch(`/calendar/${id}/portal-publish`, { ...base, method: 'PUT', headers: mutHeaders() });
+  if (!res.ok) throw new Error(String(res.status));
+};
+
+export const unpublishCalendarPortal = async (id: string): Promise<void> => {
+  const res = await fetch(`/calendar/${id}/portal-publish`, { ...base, method: 'DELETE', headers: xsrfHeader() });
+  if (!res.ok && res.status !== 204) throw new Error(String(res.status));
+};
+
 // ── Événements ────────────────────────────────────────────────────────────────
 export const getEvents = async (calendarId: string): Promise<CalendarEvent[]> =>
   json<CalendarEvent[]>(await fetch(`/calendar/${calendarId}/events`, base));
@@ -163,6 +180,8 @@ export const api = {
   createCalendar,
   updateCalendar,
   deleteCalendar,
+  publishCalendarPortal,
+  unpublishCalendarPortal,
   getEvents,
   createEvent,
   updateEvent,

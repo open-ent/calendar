@@ -25,6 +25,14 @@ public class Field {
     public static final String UPDATED = "updated";
     public static final String ISUPDATING = "isUpdating";
     public static final String COLOR = "color";
+    // Calendar type ("structure"/"group"/personal) and owning structure, set at creation
+    // (POST /calendars/structure, /calendars/group)
+    public static final String STRUCTUREID = "structureId";
+    public static final String TYPE_STRUCTURE = "structure";
+    // Publication d'un agenda d'établissement sur le portail public (flux ICS anonyme)
+    public static final String PORTALPUBLISHED = "portalPublished";
+    public static final String PORTALPUBLISHEDBY = "portalPublishedBy";
+    public static final String PORTALPUBLISHEDAT = "portalPublishedAt";
 
     //Event infos
 
