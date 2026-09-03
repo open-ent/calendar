@@ -385,7 +385,7 @@ public class CalendarController extends MongoDbControllerHelper {
     @Put("/:id/portal-publish")
     @ApiDoc("Publish a structure calendar's events as a public ICS feed on the school's public portal.")
     @ResourceFilter(AdminOfCalendarStructure.class)
-    @SecuredAction(value = Rights.PORTAL_PUBLISH, type = ActionType.RESOURCE)
+    @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
     @Trace(Actions.PORTAL_PUBLISH_CALENDAR)
     public void portalPublish(final HttpServerRequest request) {
         final String id = request.params().get(Field.ID);
@@ -404,7 +404,7 @@ public class CalendarController extends MongoDbControllerHelper {
     @Delete("/:id/portal-publish")
     @ApiDoc("Unpublish a structure calendar from the public portal.")
     @ResourceFilter(AdminOfCalendarStructure.class)
-    @SecuredAction(value = Rights.PORTAL_PUBLISH, type = ActionType.RESOURCE)
+    @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
     @Trace(Actions.PORTAL_UNPUBLISH_CALENDAR)
     public void portalUnpublish(final HttpServerRequest request) {
         final String id = request.params().get(Field.ID);

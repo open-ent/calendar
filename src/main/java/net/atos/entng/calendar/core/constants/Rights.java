@@ -8,7 +8,4 @@ public class Rights {
     public static final String GET = "calendar.get";
     public static final String VIEW = "calendar.view";
 
-    /** Publier/dépublier un agenda d'établissement sur le portail public (réservé ADML, cf. AdminOfCalendarStructure). */
-    public static final String PORTAL_PUBLISH = "calendar.portalpublish";
-
 }
