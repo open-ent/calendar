@@ -599,6 +599,53 @@ public class CalendarController extends MongoDbControllerHelper {
                             });
                 });
                 break;
+            case "create-event-from-booking": {
+                // Symétrique du pont RbsHelper (calendar -> RBS à la création d'un événement avec
+                // "réserver une ressource") : ici RBS notifie calendar qu'une réservation vient
+                // d'être validée, pour qu'elle apparaisse dans l'agenda d'établissement. Dégradation
+                // silencieuse si la structure n'a pas d'agenda de type "structure" — l'événement
+                // n'est simplement pas créé, la réservation RBS elle-même n'est jamais affectée
+                // (RBS ne dépend pas de la réponse : eb.send, pas eb.request).
+                JsonObject body = message.body();
+                String structureId = body.getString("structureId");
+                String bookingUserId = body.getString(Field.USERID);
+
+                UserUtils.getUserInfos(eb, bookingUserId, bookingUser -> {
+                    if (bookingUser == null) {
+                        log.error("[Calendar@CalendarController::calendarEventBusHandler]: case " +
+                                "'create-event-from-booking': unknown user " + bookingUserId);
+                        return;
+                    }
+                    calendarService.findStructureCalendar(structureId)
+                            .onSuccess(structureCalendar -> {
+                                // Format produit par RBS (Postgres to_char "DD/MM/YY HH24:MI", cf.
+                                // BookingServiceSqlImpl.DATE_FORMAT), pas un ISO standard.
+                                Date startDate = DateUtils.parseDate(body.getString("startDate"), "dd/MM/yy HH:mm");
+                                Date endDate = DateUtils.parseDate(body.getString("endDate"), "dd/MM/yy HH:mm");
+                                if (startDate == null || endDate == null) {
+                                    log.error("[Calendar@CalendarController::calendarEventBusHandler]: case " +
+                                            "'create-event-from-booking': invalid dates");
+                                    return;
+                                }
+                                JsonObject event = new JsonObject()
+                                        .put(Field.TITLE, body.getString("title"))
+                                        .put(Field.STARTMOMENT, DateUtils.dateToString(startDate))
+                                        .put(Field.ENDMOMENT, DateUtils.dateToString(endDate))
+                                        .put(Field.ALLDAY_LC, false)
+                                        .put(Field.isRecurrent, false);
+                                eventServiceMongo.create(structureCalendar.getString(Field._ID), event, bookingUser, createEvent -> {
+                                    if (createEvent.isLeft()) {
+                                        log.error("[Calendar@CalendarController::calendarEventBusHandler]: case " +
+                                                "'create-event-from-booking': failed to create event: " + createEvent.left().getValue());
+                                    }
+                                });
+                            })
+                            .onFailure(err -> log.info("[Calendar@CalendarController::calendarEventBusHandler]: case " +
+                                    "'create-event-from-booking': no structure calendar for structure " + structureId +
+                                    " (booking not mirrored, this is not an error)"));
+                });
+                break;
+            }
             default:
                 String errMessage = String.format("[Calendar@%s::calendarEventBusHandler]: " +
                                 "no action defined",
