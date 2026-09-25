@@ -57,6 +57,7 @@
   "calendar.event.attachment.download.error": "Error when trying to download attachment",
   "calendar.event.attachments": "Attachments",
   "calendar.booking.right.denied": "You do not have the right to attach a booking to this shared calendar",
+  "calendar.booking.right.hint": "Allow attaching a booking (room, mobile equipment) to this calendar's events",
   "calendar.booking.proposal.push.notif.body": "is proposing a resource booking on the event",
   "calendar.booking.proposal.accepted.push.notif.body": "accepted your booking proposal on the event",
   "calendar.booking.proposal.refused.push.notif.body": "refused your booking proposal on the event",

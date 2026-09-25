@@ -1194,7 +1194,43 @@ export const calendarController = ng.controller('CalendarController',
             $scope.shareCalendar = function (calendar, event) {
                 $scope.calendar = calendar;
                 $scope.display.showPanelCalendar = true;
+                $scope.loadBookingRights();
                 event.stopPropagation();
+            };
+
+            // Point C : droit de partage granulaire "associer une réservation RBS" — hors du
+            // composant `share-panel` générique du socle (limité à 5 rôles figés, cf. mémoire
+            // openent-shareroles-5-roles-figes), stocké/édité via des endpoints dédiés.
+            $scope.bookingRights = { collaborators: [], loading: false };
+
+            $scope.loadBookingRights = async function (): Promise<void> {
+                if (!$scope.calendar || !$scope.calendar._id) {
+                    $scope.bookingRights.collaborators = [];
+                    return;
+                }
+                $scope.bookingRights.loading = true;
+                try {
+                    const response = await http.get(`/calendar/${$scope.calendar._id}/booking-rights`);
+                    $scope.bookingRights.collaborators = response.data || [];
+                } catch (e) {
+                    $scope.bookingRights.collaborators = [];
+                }
+                $scope.bookingRights.loading = false;
+                safeApply($scope);
+            };
+
+            $scope.toggleBookingRight = async function (collaborator): Promise<void> {
+                collaborator.hasBookingRight = !collaborator.hasBookingRight;
+                const userIds = $scope.bookingRights.collaborators
+                    .filter((c: any) => c.hasBookingRight)
+                    .map((c: any) => c.userId);
+                try {
+                    await http.put(`/calendar/${$scope.calendar._id}/booking-rights`, { userIds, groupIds: [] });
+                } catch (e) {
+                    // échec : on revient à l'état précédent plutôt que de laisser la case mentir
+                    collaborator.hasBookingRight = !collaborator.hasBookingRight;
+                }
+                safeApply($scope);
             };
 
             /** Publication/dépublication d'un agenda d'établissement sur le portail public (flux ICS anonyme). */

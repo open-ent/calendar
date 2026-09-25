@@ -46,9 +46,11 @@ import net.atos.entng.calendar.helpers.PlatformHelper;
 import net.atos.entng.calendar.models.CalendarModel;
 import net.atos.entng.calendar.security.AdminOfCalendarStructure;
 import net.atos.entng.calendar.security.ShareEventConf;
+import net.atos.entng.calendar.models.User;
 import net.atos.entng.calendar.services.CalendarService;
 import net.atos.entng.calendar.services.EventServiceMongo;
 import net.atos.entng.calendar.services.ServiceFactory;
+import net.atos.entng.calendar.services.UserService;
 import net.atos.entng.calendar.services.impl.EventServiceMongoImpl;
 import net.atos.entng.calendar.utils.DateUtils;
 import org.entcore.common.events.EventHelper;
@@ -64,6 +66,7 @@ import org.entcore.common.user.UserUtils;
 import org.vertx.java.core.http.RouteMatcher;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class CalendarController extends MongoDbControllerHelper {
     static final String RESOURCE_NAME = "agenda";
@@ -74,6 +77,7 @@ public class CalendarController extends MongoDbControllerHelper {
     private final CalendarHelper calendarHelper;
     private final PlatformHelper platformHelper;
     private final EventServiceMongo eventServiceMongo;
+    private final UserService userService;
 
     /** IHM par défaut : "react" (nouvelle) ou "angular" (ancienne), pilotée par la conf `frontend-ui`
      *  (bloc du module dans ent-core.yaml, alimentée par FRONTEND_UI_DEFAULT).
@@ -98,6 +102,7 @@ public class CalendarController extends MongoDbControllerHelper {
         this.calendarHelper = new CalendarHelper(collection, serviceFactory, eb, config);
         this.platformHelper = new PlatformHelper(serviceFactory);
         this.eventServiceMongo = new EventServiceMongoImpl(Field.CALENDAREVENT, eb, serviceFactory);
+        this.userService = serviceFactory.userService();
     }
 
     @Get("/config")
@@ -255,6 +260,55 @@ public class CalendarController extends MongoDbControllerHelper {
      * incrémental). Lu par {@code EventHelper#resolveCalendarRights} pour le blocage/proposition
      * d'une NOUVELLE réservation par un collaborateur non-propriétaire (cf. point B2).
      */
+    /**
+     * Point C (suite) : liste les COLLABORATEURS individuels actuellement partagés sur cet agenda
+     * (extraits de {@code shared}, noms résolus via {@code userService.fetchUser}) avec leur droit
+     * de réservation actuel — alimente la case à cocher dédiée du panneau de partage (le composant
+     * générique `share-panel` du socle ne permet pas d'exposer ce champ personnalisé). Les groupes
+     * partagés (pas de nom individuel à résoudre simplement) ne sont pas listés ici — hors scope
+     * MVP, le droit de réservation via un GROUPE reste accordable par id brut sur l'endpoint PUT.
+     */
+    @Get("/:id/booking-rights")
+    @ApiDoc("Liste les collaborateurs partagés sur cet agenda avec leur droit de réservation actuel.")
+    @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
+    public void getBookingRights(final HttpServerRequest request) {
+        String calendarId = request.params().get("id");
+        UserUtils.getAuthenticatedUserInfos(eb, request).onSuccess(user -> {
+            calendarService.list(Collections.singletonList(calendarId)).onSuccess(res -> {
+                if (res == null || res.isEmpty()) {
+                    renderJson(request, new JsonArray());
+                    return;
+                }
+                JsonObject calendar = (JsonObject) res.getValue(0);
+                JsonArray shared = calendar.getJsonArray(Field.shared, new JsonArray());
+                JsonArray bookingRights = calendar.getJsonArray(Field.BOOKINGRIGHTS, new JsonArray());
+                Set<String> grantedUserIds = bookingRights.stream()
+                        .map(o -> (JsonObject) o)
+                        .map(o -> o.getString(Field.USERID))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                List<String> sharedUserIds = shared.stream()
+                        .map(o -> (JsonObject) o)
+                        .map(o -> o.getString(Field.USERID))
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .collect(Collectors.toList());
+                if (sharedUserIds.isEmpty()) {
+                    renderJson(request, new JsonArray());
+                    return;
+                }
+                userService.fetchUser(sharedUserIds, user, false).onSuccess(users -> {
+                    JsonArray result = new JsonArray();
+                    users.forEach(u -> result.add(new JsonObject()
+                            .put(Field.USERID, u.id())
+                            .put(Field.DISPLAYNAME, u.displayName())
+                            .put(Field.HASBOOKINGRIGHT, grantedUserIds.contains(u.id()))));
+                    renderJson(request, result);
+                }).onFailure(err -> renderError(request));
+            }).onFailure(err -> renderError(request));
+        });
+    }
+
     @Put("/:id/booking-rights")
     @ApiDoc("Définit la liste des utilisateurs/groupes autorisés à associer une réservation RBS sur cet agenda partagé.")
     @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
