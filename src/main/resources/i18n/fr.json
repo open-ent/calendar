@@ -56,6 +56,7 @@
   "calendar.event.allday": "Toute la journée",
   "calendar.event.attachment.download.error": "Erreur lors du téléchargement de la pièce jointe",
   "calendar.event.attachments": "Pièces jointes",
+  "calendar.booking.right.denied": "Vous n'avez pas le droit d'associer une réservation à cet agenda partagé",
   "calendar.booking.proposal.push.notif.body": "propose une réservation de ressource sur l'événement",
   "calendar.booking.proposal.accepted.push.notif.body": "a accepté votre proposition de réservation sur l'événement",
   "calendar.booking.proposal.refused.push.notif.body": "a refusé votre proposition de réservation sur l'événement",

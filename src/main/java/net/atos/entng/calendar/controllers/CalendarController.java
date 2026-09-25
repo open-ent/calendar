@@ -33,6 +33,7 @@ import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import net.atos.entng.calendar.core.constants.Actions;
 import net.atos.entng.calendar.core.constants.Field;
@@ -239,6 +240,36 @@ public class CalendarController extends MongoDbControllerHelper {
             public void handle(JsonObject event) {
                 update(request);
             }
+        });
+    }
+
+    /**
+     * Point C (chantier "vue consolidée EDT+RBS") : droit de partage granulaire "associer une
+     * réservation RBS (salle/matériel mobile) à un événement" — distinct du droit de contribution
+     * général. Le socle ENT n'accepte que 5 rôles de partage figés (read/contrib/manager/publish/
+     * comment, cf. {@code org.entcore.common.share.ShareRoles}) : impossible d'ajouter un rôle
+     * personnalisé "booking" au panneau de partage générique. Stocké donc en dehors de ce
+     * mécanisme, comme un champ dédié {@code bookingRights} sur le document du calendrier (liste de
+     * {@code {userId}}/{@code {groupId}}), réservé au propriétaire/gestionnaire de l'agenda — le
+     * corps REMPLACE la liste complète (même patron que {@code shareCalendarSubmit}, pas un ajout
+     * incrémental). Lu par {@code EventHelper#resolveCalendarRights} pour le blocage/proposition
+     * d'une NOUVELLE réservation par un collaborateur non-propriétaire (cf. point B2).
+     */
+    @Put("/:id/booking-rights")
+    @ApiDoc("Définit la liste des utilisateurs/groupes autorisés à associer une réservation RBS sur cet agenda partagé.")
+    @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
+    public void updateBookingRights(final HttpServerRequest request) {
+        String calendarId = request.params().get("id");
+        RequestUtils.bodyToJson(request, body -> {
+            JsonArray bookingRights = new JsonArray();
+            body.getJsonArray("userIds", new JsonArray()).forEach(userId ->
+                    bookingRights.add(new JsonObject().put(Field.USERID, userId)));
+            body.getJsonArray("groupIds", new JsonArray()).forEach(groupId ->
+                    bookingRights.add(new JsonObject().put(Field.groupId, groupId)));
+
+            calendarService.update(calendarId, new JsonObject().put(Field.BOOKINGRIGHTS, bookingRights))
+                    .onSuccess(v -> renderJson(request, bookingRights))
+                    .onFailure(err -> renderError(request));
         });
     }
 

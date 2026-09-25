@@ -94,33 +94,20 @@ public class RbsHelper {
     }
 
     /**
-     * Synchronise réellement RBS lors de la modification d'un événement DÉJÀ enregistré.
-     * <p>
-     * Jusqu'ici, {@code EventHelper.update()} ne touchait jamais RBS (contrairement à
-     * {@code create()}/{@code delete()}) : le document Mongo de l'événement pouvait donc afficher
-     * une réservation qui ne correspondait à aucune ligne réelle dans {@code rbs.booking}. Le front
-     * renvoie systématiquement la liste COMPLÈTE et actuelle des bookings (pas un diff) : chaque
-     * entrée déjà existante porte son id RBS réel ({@code SavedBooking.id}), une entrée neuve n'en a
-     * pas encore. On calcule donc ici le diff par id entre l'état Mongo avant modification et le
-     * payload reçu, pour ne créer QUE les entrées réellement neuves — envoyer tel quel le tableau
-     * complet à {@code saveBookingsInRbs} créerait un doublon en base pour chaque réservation déjà
-     * existante (le module RBS fait toujours un INSERT, jamais un update-si-id-connu).
-     *
-     * @param request  la requête HTTP (i18n/host, requis par {@link #saveBookingsInRbs})
-     * @param oldEvent le document Mongo de l'événement TEL QU'IL ÉTAIT avant cette modification
-     * @param object   le payload de la modification — MUTÉ : {@code bookings}/{@code hasBooking}
-     *                 sont réécrits avec l'état réel après synchronisation RBS, pour que
-     *                 {@code crudService.update} persiste la vérité plutôt que la simple demande
-     *                 du client
-     * @return la liste des échecs d'annulation RBS (jamais bloquant, cf. {@link #checkAndDeleteBookingRights})
+     * Calcule le diff par id RBS entre l'état existant ({@code oldBookings}, vide en création) et le
+     * payload reçu ({@code newBookings}) — fonction PURE, aucun appel RBS. Extraite de
+     * {@link #syncBookingsOnUpdate} pour être réutilisée par {@code EventHelper.create()}/
+     * {@code update()} au moment de décider si une NOUVELLE réservation (point C, droit de partage
+     * granulaire "calendar.booking") doit être bloquée, mise en proposition (B2) ou créée
+     * directement — sans toucher aux réservations déjà existantes ({@code toKeep}) ni aux
+     * suppressions ({@code idsToDelete}), toujours autorisées indépendamment de ce droit.
      */
-    public static Future<JsonArray> syncBookingsOnUpdate(HttpServerRequest request, JsonObject oldEvent, JsonObject object,
-                                                          UserInfos user, JsonObject config, EventBus eb) {
-        JsonArray oldBookings = oldEvent.getJsonArray(Field.BOOKINGS, new JsonArray());
-        JsonArray newBookings = object.getJsonArray(Field.BOOKINGS, new JsonArray());
+    public static JsonObject diffBookings(JsonArray oldBookings, JsonArray newBookings) {
+        JsonArray oldB = oldBookings == null ? new JsonArray() : oldBookings;
+        JsonArray newB = newBookings == null ? new JsonArray() : newBookings;
 
         Set<Integer> oldIds = new HashSet<>();
-        for (Object o : oldBookings) {
+        for (Object o : oldB) {
             Integer id = ((JsonObject) o).getInteger(Field.ID, null);
             if (id != null) {
                 oldIds.add(id);
@@ -130,7 +117,7 @@ public class RbsHelper {
         JsonArray toKeep = new JsonArray();
         JsonArray toCreate = new JsonArray();
         Set<Integer> keptIds = new HashSet<>();
-        for (Object o : newBookings) {
+        for (Object o : newB) {
             JsonObject booking = (JsonObject) o;
             Integer id = booking.getInteger(Field.ID, null);
             if (id != null && oldIds.contains(id)) {
@@ -147,6 +134,42 @@ public class RbsHelper {
                 idsToDelete.add(new JsonObject().put(Field.ID, oldId));
             }
         }
+
+        return new JsonObject()
+                .put(Field.TOKEEP, toKeep)
+                .put(Field.TOCREATE, toCreate)
+                .put(Field.IDSTODELETE, idsToDelete);
+    }
+
+    /**
+     * Synchronise réellement RBS lors de la modification d'un événement DÉJÀ enregistré.
+     * <p>
+     * Jusqu'ici, {@code EventHelper.update()} ne touchait jamais RBS (contrairement à
+     * {@code create()}/{@code delete()}) : le document Mongo de l'événement pouvait donc afficher
+     * une réservation qui ne correspondait à aucune ligne réelle dans {@code rbs.booking}. Le front
+     * renvoie systématiquement la liste COMPLÈTE et actuelle des bookings (pas un diff) : chaque
+     * entrée déjà existante porte son id RBS réel ({@code SavedBooking.id}), une entrée neuve n'en a
+     * pas encore. On calcule donc ici le diff par id entre l'état Mongo avant modification et le
+     * payload reçu, pour ne créer QUE les entrées réellement neuves — envoyer tel quel le tableau
+     * complet à {@code saveBookingsInRbs} créerait un doublon en base pour chaque réservation déjà
+     * existante (le module RBS fait toujours un INSERT, jamais un update-si-id-connu).
+     *
+     * @param request  la requête HTTP (i18n/host, requis par {@link #saveBookingsInRbs})
+     * @param diff     le diff par id RBS précalculé (cf. {@link #diffBookings}) — {@code toCreate}
+     *                 peut avoir été vidé par l'appelant (point C, droit "calendar.booking" refusé
+     *                 ou réservation partie en proposition B2) sans affecter {@code toKeep}/
+     *                 {@code idsToDelete}
+     * @param object   le payload de la modification — MUTÉ : {@code bookings}/{@code hasBooking}
+     *                 sont réécrits avec l'état réel après synchronisation RBS, pour que
+     *                 {@code crudService.update} persiste la vérité plutôt que la simple demande
+     *                 du client
+     * @return la liste des échecs d'annulation RBS (jamais bloquant, cf. {@link #checkAndDeleteBookingRights})
+     */
+    public static Future<JsonArray> syncBookingsOnUpdate(HttpServerRequest request, JsonObject diff, JsonObject object,
+                                                          UserInfos user, JsonObject config, EventBus eb) {
+        JsonArray toKeep = diff.getJsonArray(Field.TOKEEP, new JsonArray());
+        JsonArray toCreate = diff.getJsonArray(Field.TOCREATE, new JsonArray());
+        JsonArray idsToDelete = diff.getJsonArray(Field.IDSTODELETE, new JsonArray());
 
         JsonObject creationPayload = object.copy();
         creationPayload.put(Field.BOOKINGS, toCreate);
