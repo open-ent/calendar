@@ -2175,6 +2175,15 @@ export const calendarController = ng.controller('CalendarController',
                 resources: [],
                 typeNames: [],
                 selectedResource: 'ALL',
+                // Point E : structures de l'utilisateur (model.me.structures/structureNames, deux
+                // listes parallèles — même patron de reconstruction {id, name} que
+                // modules/rbs/.../models.ts model.loadStructures) ; selectedStructureId n'est
+                // renseigné qu'au premier calcul (cf. getAvailabilityStructureId), le sélecteur du
+                // template n'apparaît que si plus d'une structure.
+                structures: (model.me.structures || []).map((id: string, i: number) => ({
+                    id, name: (model.me.structureNames && model.me.structureNames[i]) || id,
+                })),
+                selectedStructureId: undefined,
                 weekStart: moment().startOf('week'),
                 pickedDate: new Date(),
                 mode: 'week',
@@ -2182,26 +2191,42 @@ export const calendarController = ng.controller('CalendarController',
                 loading: false,
             };
 
-            // Point D : le panneau n'est plus limité à l'agenda d'ÉTABLISSEMENT actuellement
+            // Point D/E : le panneau n'est plus limité à l'agenda d'ÉTABLISSEMENT actuellement
             // affiché (coché dans la side-bar) — utilisable depuis n'importe quel agenda non
-            // externe (personnel, de groupe, d'établissement). Établissement retenu : celui de
-            // l'agenda structure actuellement sélectionné s'il y en a un (comportement historique,
-            // préservé — $scope.calendar est réutilisé ailleurs comme modèle de formulaire,
-            // donc pas fiable pour identifier "l'agenda ouvert"), sinon la première structure de
-            // l'utilisateur (model.me.structures, même patron que $scope.onChangeCalendarType
-            // ci-dessus). Le sélecteur explicite entre PLUSIEURS structures est un point distinct
-            // du backlog (point E) : ici on ne fait que ne plus dépendre d'un agenda structure
-            // sélectionné, pas encore proposer de changer de structure depuis le panneau.
+            // externe (personnel, de groupe, d'établissement). Établissement retenu, par ordre de
+            // priorité : (1) celui explicitement choisi dans le sélecteur du panneau (point E,
+            // $scope.availability.selectedStructureId) ; (2) celui de l'agenda structure
+            // actuellement sélectionné dans la side-bar (comportement historique, préservé —
+            // $scope.calendar est réutilisé ailleurs comme modèle de formulaire, donc pas fiable
+            // pour identifier "l'agenda ouvert") ; (3) la première structure de l'utilisateur
+            // (model.me.structures, même patron que $scope.onChangeCalendarType ci-dessus). Le
+            // résultat (2)/(3) est mémorisé dans selectedStructureId pour que le sélecteur reflète
+            // le choix par défaut dès l'ouverture, sans appel supplémentaire.
             const getAvailabilityStructureId = (): string | undefined => {
+                if ($scope.availability.selectedStructureId) {
+                    return $scope.availability.selectedStructureId;
+                }
                 const structureCalendar = (($scope.calendars && $scope.calendars.selected) || [])
                     .find((cal: Calendar) => cal.type === 'structure');
-                if (structureCalendar && structureCalendar.structureId) {
-                    return structureCalendar.structureId;
-                }
-                return (model.me.structures && model.me.structures.length > 0) ? model.me.structures[0] : undefined;
+                const resolved = (structureCalendar && structureCalendar.structureId)
+                    ? structureCalendar.structureId
+                    : ((model.me.structures && model.me.structures.length > 0) ? model.me.structures[0] : undefined);
+                $scope.availability.selectedStructureId = resolved;
+                return resolved;
             };
 
             $scope.hasSelectedStructureCalendar = (): boolean => !!getAvailabilityStructureId();
+
+            // Point E : changement explicite d'établissement depuis le panneau — les ressources
+            // RBS sont propres à une structure (cf. loadAvailabilityResources), donc invalidées et
+            // rechargées avant de relancer la consultation EDT+RBS.
+            $scope.changeAvailabilityStructure = async function (): Promise<void> {
+                $scope.availability.resources = [];
+                $scope.availability.typeNames = [];
+                $scope.availability.selectedResource = 'ALL';
+                await loadAvailabilityResources($scope.availability.selectedStructureId);
+                await $scope.loadAvailability();
+            };
 
             const loadAvailabilityResources = async (structureId: string): Promise<void> => {
                 try {

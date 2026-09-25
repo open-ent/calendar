@@ -9,6 +9,7 @@
   "calendar.availability.title": "Disponibilité des ressources",
   "calendar.availability.help": "Consultez les créneaux déjà occupés (emploi du temps et réservations) pour les ressources de l'établissement.",
   "calendar.availability.pick.resource": "Choisir une ressource",
+  "calendar.availability.pick.structure": "School",
   "calendar.availability.pick.resource.all": "Toutes les ressources",
   "calendar.availability.pick.resource.placeholder": "-- Sélectionner --",
   "calendar.availability.week.previous": "Semaine précédente",

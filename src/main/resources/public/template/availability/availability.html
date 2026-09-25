@@ -4,6 +4,13 @@
 	<article class="twelve cell">
 		<p class="info"><i18n>calendar.availability.help</i18n></p>
 
+		<div class="row" ng-if="availability.structures.length > 1">
+			<label class="three cell"><i18n>calendar.availability.pick.structure</i18n></label>
+			<select class="nine cell" ng-model="availability.selectedStructureId" ng-change="changeAvailabilityStructure()">
+				<option ng-repeat="structure in availability.structures" ng-value="structure.id">[[structure.name]]</option>
+			</select>
+		</div>
+
 		<div class="row">
 			<label class="three cell"><i18n>calendar.availability.pick.resource</i18n></label>
 			<select class="nine cell" ng-model="availability.selectedResource" ng-change="loadAvailability()">
