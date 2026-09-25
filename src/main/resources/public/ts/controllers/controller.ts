@@ -2146,14 +2146,26 @@ export const calendarController = ng.controller('CalendarController',
                 loading: false,
             };
 
-            // Le panneau ne concerne que l'agenda d'ÉTABLISSEMENT actuellement affiché (coché
-            // dans la side-bar) — $scope.calendar est réutilisé ailleurs comme modèle de
-            // formulaire (création/édition), donc pas fiable pour identifier "l'agenda ouvert".
-            const getSelectedStructureCalendar = (): Calendar | undefined =>
-                (($scope.calendars && $scope.calendars.selected) || [])
+            // Point D : le panneau n'est plus limité à l'agenda d'ÉTABLISSEMENT actuellement
+            // affiché (coché dans la side-bar) — utilisable depuis n'importe quel agenda non
+            // externe (personnel, de groupe, d'établissement). Établissement retenu : celui de
+            // l'agenda structure actuellement sélectionné s'il y en a un (comportement historique,
+            // préservé — $scope.calendar est réutilisé ailleurs comme modèle de formulaire,
+            // donc pas fiable pour identifier "l'agenda ouvert"), sinon la première structure de
+            // l'utilisateur (model.me.structures, même patron que $scope.onChangeCalendarType
+            // ci-dessus). Le sélecteur explicite entre PLUSIEURS structures est un point distinct
+            // du backlog (point E) : ici on ne fait que ne plus dépendre d'un agenda structure
+            // sélectionné, pas encore proposer de changer de structure depuis le panneau.
+            const getAvailabilityStructureId = (): string | undefined => {
+                const structureCalendar = (($scope.calendars && $scope.calendars.selected) || [])
                     .find((cal: Calendar) => cal.type === 'structure');
+                if (structureCalendar && structureCalendar.structureId) {
+                    return structureCalendar.structureId;
+                }
+                return (model.me.structures && model.me.structures.length > 0) ? model.me.structures[0] : undefined;
+            };
 
-            $scope.hasSelectedStructureCalendar = (): boolean => !!getSelectedStructureCalendar();
+            $scope.hasSelectedStructureCalendar = (): boolean => !!getAvailabilityStructureId();
 
             const loadAvailabilityResources = async (structureId: string): Promise<void> => {
                 try {
@@ -2171,20 +2183,20 @@ export const calendarController = ng.controller('CalendarController',
             };
 
             $scope.showAvailability = async function (): Promise<void> {
-                const structureCalendar = getSelectedStructureCalendar();
-                if (!structureCalendar) {
+                const structureId = getAvailabilityStructureId();
+                if (!structureId) {
                     return;
                 }
                 $scope.display.showAvailabilityPanel = true;
                 if ($scope.availability.resources.length === 0) {
-                    await loadAvailabilityResources(structureCalendar.structureId);
+                    await loadAvailabilityResources(structureId);
                 }
                 await $scope.loadAvailability();
             };
 
             $scope.loadAvailability = async function (): Promise<void> {
-                const structureCalendar = getSelectedStructureCalendar();
-                if (!structureCalendar) {
+                const structureId = getAvailabilityStructureId();
+                if (!structureId) {
                     return;
                 }
                 $scope.availability.loading = true;
@@ -2210,7 +2222,7 @@ export const calendarController = ng.controller('CalendarController',
 
                 try {
                     const courses = await availabilityService.fetchCourses(
-                        structureCalendar.structureId, startDateOnly, endDateOnly
+                        structureId, startDateOnly, endDateOnly
                     );
                     (courses || []).forEach((course: any) => {
                         (course.roomLabels || []).forEach((roomLabel: string) => {
