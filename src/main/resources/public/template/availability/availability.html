@@ -1,0 +1,49 @@
+<div class="row" guard-root="calendarAvailabilityRoot">
+	<h2><i18n>calendar.availability.title</i18n></h2>
+
+	<article class="twelve cell">
+		<p class="info"><i18n>calendar.availability.help</i18n></p>
+
+		<div class="row">
+			<label class="three cell"><i18n>calendar.availability.pick.resource</i18n></label>
+			<select class="nine cell" ng-model="availability.selectedResource" ng-change="loadAvailability()">
+				<option value="ALL"><i18n>calendar.availability.pick.resource.all</i18n></option>
+				<optgroup ng-repeat="typeName in availability.typeNames" label="[[typeName]]">
+					<option ng-repeat="resource in availability.resources | filter:{typeName: typeName}" ng-value="resource">[[resource.name]]</option>
+				</optgroup>
+			</select>
+		</div>
+
+		<div class="row">
+			<button class="right-magnet" ng-click="changeAvailabilityWeek(-1)">
+				<i18n>calendar.availability.week.previous</i18n>
+			</button>
+			<span class="cell" ng-if="availability.mode === 'week'">[[availability.weekStart.format('DD/MM/YYYY')]]</span>
+			<span class="cell" ng-if="availability.mode === 'day'">[[availability.pickedDate | date:'dd/MM/yyyy']]</span>
+			<button class="right-magnet" ng-click="changeAvailabilityWeek(1)">
+				<i18n>calendar.availability.week.next</i18n>
+			</button>
+			<label class="cell horizontal-spacing-twice"><i18n>calendar.availability.pick.date</i18n></label>
+			<date-picker class="two cell horizontal-spacing" ng-model="availability.pickedDate"
+						 ng-change="pickAvailabilityDate()" past="true" exp="true"></date-picker>
+		</div>
+
+		<div class="row" ng-if="!availability.loading && availability.slots.length === 0">
+			<p class="info" ng-if="availability.mode === 'week' && availability.selectedResource !== 'ALL'"><i18n>calendar.availability.empty</i18n></p>
+			<p class="info" ng-if="availability.mode === 'day' && availability.selectedResource !== 'ALL'"><i18n>calendar.availability.empty.day</i18n></p>
+			<p class="info" ng-if="availability.mode === 'week' && availability.selectedResource === 'ALL'"><i18n>calendar.availability.empty.all</i18n></p>
+			<p class="info" ng-if="availability.mode === 'day' && availability.selectedResource === 'ALL'"><i18n>calendar.availability.empty.all.day</i18n></p>
+		</div>
+
+		<table class="list-view twelve cell" ng-if="availability.slots.length > 0">
+			<tbody>
+				<tr ng-repeat="slot in availability.slots" ng-class="{'availability-edt': slot.source === 'edt', 'availability-rbs': slot.source === 'rbs'}">
+					<td class="two" ng-if="availability.selectedResource === 'ALL'">[[slot.resourceName]]</td>
+					<td class="two">[[slot.start.format('dddd DD/MM')]]</td>
+					<td class="two">[[slot.start.format('HH:mm')]] - [[slot.end.format('HH:mm')]]</td>
+					<td class="two">[[slot.label]]</td>
+				</tr>
+			</tbody>
+		</table>
+	</article>
+</div>

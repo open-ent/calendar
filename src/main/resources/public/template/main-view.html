@@ -201,6 +201,13 @@
     </lightbox>
 </div>
 
+<!-- Lightbox : Disponibilité EDT + RBS (partie 5, vue consolidée EDT+RBS) -->
+<div ng-if="display.showAvailabilityPanel">
+    <lightbox show="display.showAvailabilityPanel" on-close="display.showAvailabilityPanel = false;">
+        <div ng-include="'/calendar/public/template/availability/availability.html'"></div>
+    </lightbox>
+</div>
+
 <!-- Lightbox : Delete calendar -->
 <div ng-if="display.confirmDeleteCalendar">
     <lightbox show="display.confirmDeleteCalendar" on-close="cancelRemoveCalendar()">
