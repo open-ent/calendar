@@ -213,25 +213,48 @@ public class EventHelper extends MongoDbControllerHelper {
                                         remindersObject.set(object.getJsonObject(Field.REMINDERS));
                                         object.remove(Field.REMINDERS);
                                     }
-                                    crudService.update(eventId, object, user, event -> {
-                                        if (event.isRight()) {
-                                            final JsonObject message = new JsonObject();
-                                            message.put("id", calendarId);
-                                            message.put("eventId", eventId);
-                                            message.put("start_date", (String) null);
-                                            message.put("end_date", (String) null);
-                                            message.put("sendNotif", true);
-                                            notifyEventCreatedOrUpdated(request, user, message, false);
-                                            if (!remindersObject.get().equals(new JsonObject())) {
-                                                reminderHelper.remindersEventFormActions(remindersObject.get().containsKey(Field._ID)
-                                                        ? Actions.UPDATE_REMINDER : Actions.CREATE_REMINDER,
-                                                        eventId, user, remindersObject.get());
-                                            }
-                                            renderJson(request, event.right().getValue(), 200);
-                                        } else if (event.isLeft()) {
-                                            log.error("Error when getting notification informations.");
-                                        }
-                                    });
+                                    // Synchronise réellement RBS (create()/delete() le font déjà,
+                                    // update() ne le faisait jamais avant ce correctif — cf.
+                                    // RbsHelper.syncBookingsOnUpdate) : récupère l'état Mongo AVANT
+                                    // modification pour calculer un diff par id RBS, puis MUTE
+                                    // `object` (bookings/hasBooking) avec l'état réel avant de le
+                                    // persister.
+                                    // La synchro RBS est en meilleur effort : un échec de lecture/
+                                    // synchro ne doit jamais empêcher la sauvegarde de l'événement
+                                    // lui-même (comportement d'avant ce correctif, préservé).
+                                    eventService.retrieve(calendarId, eventId, user)
+                                            .compose(oldEvent -> RbsHelper.syncBookingsOnUpdate(request, oldEvent, object, user, config, eb))
+                                            .recover(err -> {
+                                                log.error("[Calendar@EventHelper::update] RBS booking sync error for event "
+                                                        + eventId, err);
+                                                return Future.succeededFuture(new JsonArray());
+                                            })
+                                            .onComplete(syncResult -> {
+                                                if (syncResult.succeeded() && !syncResult.result().isEmpty()) {
+                                                    syncResult.result().forEach(failedDeletion ->
+                                                            log.error("[Calendar@EventHelper::update] RBS booking cancellation failed for event "
+                                                                    + eventId + ": " + failedDeletion));
+                                                }
+                                                crudService.update(eventId, object, user, event -> {
+                                                    if (event.isRight()) {
+                                                        final JsonObject message = new JsonObject();
+                                                        message.put("id", calendarId);
+                                                        message.put("eventId", eventId);
+                                                        message.put("start_date", (String) null);
+                                                        message.put("end_date", (String) null);
+                                                        message.put("sendNotif", true);
+                                                        notifyEventCreatedOrUpdated(request, user, message, false);
+                                                        if (!remindersObject.get().equals(new JsonObject())) {
+                                                            reminderHelper.remindersEventFormActions(remindersObject.get().containsKey(Field._ID)
+                                                                    ? Actions.UPDATE_REMINDER : Actions.CREATE_REMINDER,
+                                                                    eventId, user, remindersObject.get());
+                                                        }
+                                                        renderJson(request, event.right().getValue(), 200);
+                                                    } else if (event.isLeft()) {
+                                                        log.error("Error when getting notification informations.");
+                                                    }
+                                                });
+                                            });
                                 } else {
                                     log.error(String.format("[Calendar@EventHelper::update] " + "Submitted event is not valid"),
                                             I18n.getInstance().translate("calendar.error.date.saving", getHost(request), I18n.acceptLanguage(request)));
@@ -419,12 +442,15 @@ public class EventHelper extends MongoDbControllerHelper {
     }
 
     /**
-     * Delete calendarEvent
-     * The flow is the following:
-     * - if optional parameter deleteBookings is true, get calendarEvent
-     * - delete calendarEvent no matter what happens
-     * - if calendarEvent has been retrieved successfully, make calls to delete bookings in RBS (using event bus),
-     * if not the task is finished
+     * Suppression d'un événement d'agenda.
+     * Déroulé :
+     * - si le paramètre optionnel deleteBookings vaut true, on récupère l'événement au préalable
+     * - si l'événement porte des réservations RBS, on les annule EN PREMIER (via l'event bus)
+     * - l'événement n'est supprimé qu'une fois l'annulation des réservations réussie (ou s'il n'y
+     *   avait rien à annuler) — on ne laisse jamais une réservation RBS orpheline derrière un
+     *   événement déjà supprimé (ex. droits insuffisants sur une ressource d'un autre établissement,
+     *   cf. TypeAndResourceAppendPolicy côté RBS : l'annulation peut légitimement échouer, auquel cas
+     *   l'événement doit rester intact).
      * @param request HttpServerRequest request from the server
      */
     @Override
@@ -444,28 +470,28 @@ public class EventHelper extends MongoDbControllerHelper {
                                     : Future.succeededFuture(new JsonObject());
 
                             getCalendarEventInfos
-                                    .compose(event -> eventService.delete(calendarId, eventId, user))
-                                    .compose(res -> reminderHelper.remindersEventFormActions(Actions.DELETE_ALL_EVENT_REMINDERS, eventId))
-                                    .compose(result -> {
-                                        if (!getCalendarEventInfos.result().isEmpty()) {
-                                            return RbsHelper.checkAndDeleteBookingRights(user, getCalendarEventInfos.result(), eb);
+                                    .compose(event -> event.isEmpty()
+                                            ? Future.succeededFuture(new JsonArray())
+                                            : RbsHelper.checkAndDeleteBookingRights(user, event, eb))
+                                    .compose(deletionResults -> {
+                                        List<JsonObject> failedDeletions = ((List<JsonObject>) deletionResults.getList()).stream()
+                                                .filter((result) -> result.getString(Field.STATUS).equals(Field.ERROR))
+                                                .collect(Collectors.toList());
+                                        if (!failedDeletions.isEmpty()) {
+                                            failedDeletions.forEach((failedDeletion) -> log.error(failedDeletion.getString(Field.MESSAGE)));
+                                            return Future.failedFuture("calendar.rbs.sniplet.error.booking.deletion");
+                                        }
+                                        return eventService.delete(calendarId, eventId, user)
+                                                .compose(res -> reminderHelper.remindersEventFormActions(Actions.DELETE_ALL_EVENT_REMINDERS, eventId));
+                                    })
+                                    .onSuccess(res -> ok(request))
+                                    .onFailure(err -> {
+                                        if ("calendar.rbs.sniplet.error.booking.deletion".equals(err.getMessage())) {
+                                            badRequest(request, I18n.getInstance().translate("calendar.rbs.sniplet.error.booking.deletion", getHost(request), I18n.acceptLanguage(request)));
                                         } else {
-                                            return Future.succeededFuture(new JsonArray());
+                                            renderError(request);
                                         }
-                                    })
-                                    .onSuccess(res -> {
-                                        if (!res.isEmpty()) {
-                                            List<JsonObject> failedDeletions = ((List<JsonObject>) res.getList()).stream()
-                                                    .filter((result) -> result.getString(Field.STATUS).equals(Field.ERROR))
-                                                    .collect(Collectors.toList());
-                                            if (failedDeletions.size() > 0) {
-                                                badRequest(request, I18n.getInstance().translate("calendar.rbs.sniplet.error.booking.deletion", getHost(request), I18n.acceptLanguage(request)));
-                                                failedDeletions.forEach((failedDeletion) -> log.error(failedDeletion.getString(Field.MESSAGE)));
-                                            }
-                                        }
-                                        ok(request);
-                                    })
-                                    .onFailure(err -> renderError(request));
+                                    });
                         } else {
                             unauthorized(request);
                         }
