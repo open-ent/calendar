@@ -83,6 +83,13 @@
                                         <input ng-if="cl.myRights.manage" type="checkbox" class="calendar-checkbox"
                                                ng-click="$event.stopPropagation();" ng-model="cl.showButtons" ng-checked="cl.showButtons"
                                                ng-change="vm.hideOtherCalendarCheckboxes(cl)"/>
+                                        <!-- Titre générique ("Agenda d'établissement") identique pour tous —
+                                             seul ce tooltip distingue "mon" établissement d'un établissement
+                                             partagé par un autre propriétaire (même patron que la section
+                                             "Agendas partagés" ci-dessus). -->
+                                        <span class="tooltip-top">
+                                                <i18n>calendar.owner</i18n> <span>[[cl.owner.displayName]]</span>
+                                        </span>
                                     </a>
                                 </li>
                             </ul>
