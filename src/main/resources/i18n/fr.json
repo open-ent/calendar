@@ -261,6 +261,7 @@
   "import.browse": "Parcourir",
   "calendar.my.own.calendar": "Mon agenda",
   "calendar.event.attachment.already.added": "Certains documents sont déjà joints : seuls les nouveaux ont été ajoutés.",
+  "calendar.structure.calendar.title": "Agenda de l'établissement",
   "calendar.structure.calendars": "Agendas de l'établissement",
   "calendar.group.calendars": "Agendas de groupe",
   "calendar.type": "Type d'agenda",

@@ -23,6 +23,7 @@ import fr.wseduc.bus.BusAddress;
 import fr.wseduc.rs.*;
 import fr.wseduc.security.ActionType;
 import fr.wseduc.security.SecuredAction;
+import fr.wseduc.webutils.Either;
 import fr.wseduc.webutils.I18n;
 import fr.wseduc.webutils.http.Renders;
 import fr.wseduc.webutils.request.RequestUtils;
@@ -61,12 +62,18 @@ import org.entcore.common.http.filter.SuperAdminFilter;
 import org.entcore.common.http.filter.Trace;
 import org.entcore.common.mongodb.MongoDbConf;
 import org.entcore.common.mongodb.MongoDbControllerHelper;
+import org.entcore.common.neo4j.Neo4j;
+import org.entcore.common.service.VisibilityFilter;
 import org.entcore.common.user.UserInfos;
 import org.entcore.common.user.UserUtils;
 import org.vertx.java.core.http.RouteMatcher;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.entcore.common.http.response.DefaultResponseHandler.arrayResponseHandler;
+import static org.entcore.common.neo4j.Neo4jResult.validResultsHandler;
+import static org.entcore.common.neo4j.Neo4jResult.validUniqueResultHandler;
 
 public class CalendarController extends MongoDbControllerHelper {
     static final String RESOURCE_NAME = "agenda";
@@ -78,6 +85,7 @@ public class CalendarController extends MongoDbControllerHelper {
     private final PlatformHelper platformHelper;
     private final EventServiceMongo eventServiceMongo;
     private final UserService userService;
+    private final Neo4j neo4j = Neo4j.getInstance();
 
     /** IHM par défaut : "react" (nouvelle) ou "angular" (ancienne), pilotée par la conf `frontend-ui`
      *  (bloc du module dans ent-core.yaml, alimentée par FRONTEND_UI_DEFAULT).
@@ -146,10 +154,90 @@ public class CalendarController extends MongoDbControllerHelper {
         });
     }
 
+    /**
+     * Retour utilisateur (chantier "vue consolidée EDT+RBS") : le titre générique "Agenda
+     * d'établissement" est identique pour tous — sans le nom de l'établissement affiché dans
+     * l'intitulé lui-même, impossible de distinguer visuellement SON PROPRE établissement d'un
+     * établissement partagé par quelqu'un d'un AUTRE établissement (cas cross-établissement du
+     * point B2). Reproduit ici le corps de {@code ControllerHelper#list(HttpServerRequest)}
+     * (mêmes VisibilityFilter/crudService) en insérant une résolution Neo4j du nom
+     * d'établissement (structureName) pour chaque agenda de type "structure" avant le rendu —
+     * en un seul aller-retour Neo4j (ids distincts), jamais bloquant pour la liste elle-même en
+     * cas d'échec (meilleur effort, comme le reste des enrichissements de ce module).
+     */
     @Get("/calendars")
     @SecuredAction("calendar.view")
-    public void listCalendars(HttpServerRequest request) {
-        list(request);
+    public void listCalendars(final HttpServerRequest request) {
+        UserUtils.getUserInfos(eb, request, user -> {
+            String filter = request.params().get("filter");
+            VisibilityFilter v = VisibilityFilter.ALL;
+            if (filter != null) {
+                try {
+                    v = VisibilityFilter.valueOf(filter.toUpperCase());
+                } catch (IllegalArgumentException | NullPointerException e) {
+                    v = VisibilityFilter.ALL;
+                }
+            }
+            crudService.list(v, user, addNormalizedRights((Either<String, JsonArray> either) -> {
+                if (either.isRight()) {
+                    enrichStructureNames(either.right().getValue())
+                            .onComplete(ar -> arrayResponseHandler(request).handle(either));
+                } else {
+                    arrayResponseHandler(request).handle(either);
+                }
+            }));
+        });
+    }
+
+    /**
+     * Résout le nom de chaque établissement distinct présent parmi les agendas de type
+     * "structure", pour affichage direct dans l'intitulé côté side-bar (retour utilisateur :
+     * le titre générique "Agenda d'établissement" ne permettait pas de distinguer son propre
+     * établissement d'un établissement partagé par quelqu'un d'un AUTRE établissement).
+     * <p>
+     * Une requête PAR établissement distinct (motif {@code s.id = {id}} déjà éprouvé, cf.
+     * {@code DefaultGroupService#getInfos}) plutôt qu'un seul {@code WHERE s.id IN {ids}} :
+     * cette dernière forme, testée en direct (cypher-shell, HTTP brut) fonctionne bien contre
+     * Neo4j lui-même, mais renvoie systématiquement un résultat vide en passant par le client
+     * {@code Neo4j.execute(...)} de ce socle — anomalie non résolue (possible souci de
+     * sérialisation du paramètre liste par ce client précis), contournée ici plutôt
+     * qu'approfondie plus avant (nombre d'établissements distincts par utilisateur toujours
+     * très faible en pratique, un aller-retour par id reste négligeable).
+     */
+    private Future<Void> enrichStructureNames(JsonArray calendars) {
+        Set<String> structureIds = new HashSet<>();
+        for (Object o : calendars) {
+            JsonObject calendar = (JsonObject) o;
+            String structureId = calendar.getString(Field.STRUCTUREID);
+            if (Field.TYPE_STRUCTURE.equals(calendar.getString(Field.type)) && structureId != null) {
+                structureIds.add(structureId);
+            }
+        }
+        if (structureIds.isEmpty()) {
+            return Future.succeededFuture();
+        }
+        String query = "MATCH (s:Structure {id:{id}}) RETURN s.name as name";
+        List<Future<Void>> lookups = new ArrayList<>();
+        for (String structureId : structureIds) {
+            Promise<Void> lookup = Promise.promise();
+            lookups.add(lookup.future());
+            JsonObject params = new JsonObject().put("id", structureId);
+            neo4j.execute(query, params, validUniqueResultHandler(res -> {
+                if (res.isRight() && res.right().getValue() != null) {
+                    String name = res.right().getValue().getString("name");
+                    if (name != null) {
+                        for (Object o : calendars) {
+                            JsonObject calendar = (JsonObject) o;
+                            if (structureId.equals(calendar.getString(Field.STRUCTUREID))) {
+                                calendar.put("structureName", name);
+                            }
+                        }
+                    }
+                }
+                lookup.complete();
+            }));
+        }
+        return Future.join(lookups).map((Void) null);
     }
 
     @Get("/calendars/:id")

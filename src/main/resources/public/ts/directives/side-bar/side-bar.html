@@ -79,14 +79,13 @@
                                 <li ng-repeat="cl in vm.calendars.all | filter:vm.isStructureCalendar | orderBy: '+title'">
                                     <a class="[[cl.color]] sidebar-calendar-list" ng-class="{'selected': cl.selected, 'notselected': !cl.selected}"
                                        ng-click="vm.onOpenOrCloseCalendar(cl, true)">
-                                        <span>[[cl.title]]</span>
+                                        <span>[[vm.getCalendarTitle(cl)]]</span>
                                         <input ng-if="cl.myRights.manage" type="checkbox" class="calendar-checkbox"
                                                ng-click="$event.stopPropagation();" ng-model="cl.showButtons" ng-checked="cl.showButtons"
                                                ng-change="vm.hideOtherCalendarCheckboxes(cl)"/>
-                                        <!-- Titre générique ("Agenda d'établissement") identique pour tous —
-                                             seul ce tooltip distingue "mon" établissement d'un établissement
-                                             partagé par un autre propriétaire (même patron que la section
-                                             "Agendas partagés" ci-dessus). -->
+                                        <!-- Filet de sécurité si structureName n'a pas pu être résolu (échec
+                                             Neo4j, agenda ancien...) : le tooltip propriétaire reste affiché
+                                             en complément, même patron que la section "Agendas partagés". -->
                                         <span class="tooltip-top">
                                                 <i18n>calendar.owner</i18n> <span>[[cl.owner.displayName]]</span>
                                         </span>
