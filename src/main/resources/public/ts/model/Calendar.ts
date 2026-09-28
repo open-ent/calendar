@@ -24,6 +24,10 @@ export class Calendar implements Selectable, Shareable {
     // type d'agenda : 'personal' (défaut) | 'structure' (établissement) | 'group' (groupe)
     type: string;
     structureId: string;
+    // Nom de l'établissement (résolu côté backend, cf. CalendarController#enrichStructureNames) —
+    // affiché dans l'intitulé d'un agenda de structure pour le distinguer d'un établissement
+    // partagé par quelqu'un d'un AUTRE établissement (cf. side-bar.ts#getCalendarTitle).
+    structureName: string;
     groupId: string;
     // Publication sur le portail public (flux ICS anonyme) — réservé aux agendas de type 'structure'.
     portalPublished: boolean;
@@ -36,6 +40,7 @@ export class Calendar implements Selectable, Shareable {
             Mix.extend(this, Behaviours.applicationsBehaviours.calendar.resourceRights(calendar));
             this.type = calendar.type;
             this.structureId = calendar.structureId;
+            this.structureName = calendar.structureName;
             this.groupId = calendar.groupId;
             this.portalPublished = calendar.portalPublished === true;
             // calendar.updated['$date'] is a number (timestamp)
