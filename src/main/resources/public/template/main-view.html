@@ -123,6 +123,28 @@
 <div ng-if="display.showPanelCalendar">
     <lightbox show="display.showPanelCalendar" on-close="display.showPanelCalendar = false;">
         <share-panel app-prefix="'calendar'" resources="calendar" auto-close="true" on-submit="updateCalendars()"></share-panel>
+
+        <!-- Point C (chantier "vue consolidée EDT+RBS") : droit de partage granulaire "associer
+             une réservation" — hors du composant share-panel générique du socle (limité à 5
+             rôles de partage figés, cf. mémoire openent-shareroles-5-roles-figes), donc affiché
+             en complément, sous le panneau générique. -->
+        <div class="row top-spacing" ng-if="bookingRights.collaborators.length > 0">
+            <p><i18n>calendar.booking.right.hint</i18n></p>
+            <table class="cell twelve">
+                <tbody>
+                    <tr ng-repeat="collaborator in bookingRights.collaborators">
+                        <td>[[collaborator.displayName]]</td>
+                        <td>
+                            <label class="checkbox">
+                                <input type="checkbox" ng-checked="collaborator.hasBookingRight"
+                                    ng-click="toggleBookingRight(collaborator)" />
+                                <span></span>
+                            </label>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </lightbox>
 </div>
 

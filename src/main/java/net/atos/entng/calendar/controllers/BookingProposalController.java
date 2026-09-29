@@ -56,7 +56,11 @@ public class BookingProposalController extends MongoDbControllerHelper {
         this.config = config;
     }
 
-    @Get("/booking-proposal/event/:eventId")
+    // Chemin "by-event" (pas "event") : évite une collision de route avec EventController#getEvent
+    // (@Get("/:id/event/:eventid")) — même forme à 3 segments avec "event" au même niveau littéral,
+    // qui matchait cette route selon un ordre d'enregistrement non déterministe entre redémarrages
+    // (RouteMatcher : premier match gagne, cf. org.vertx.java.core.http.RouteMatcher#route).
+    @Get("/booking-proposal/by-event/:eventId")
     @ApiDoc("Liste les propositions de réservation RBS d'un événement.")
     @SecuredAction(value = "calendar.read", type = ActionType.AUTHENTICATED)
     public void listByEvent(final HttpServerRequest request) {

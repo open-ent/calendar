@@ -7,20 +7,3 @@
 	</p>
 	<share-panel app-prefix="'calendar'" resources="calendar"></share-panel>
 </div>
-<div class="row top-spacing" ng-if="bookingRights.collaborators.length > 0">
-	<p><i18n>calendar.booking.right.hint</i18n></p>
-	<table class="cell twelve">
-		<tbody>
-			<tr ng-repeat="collaborator in bookingRights.collaborators">
-				<td>[[collaborator.displayName]]</td>
-				<td>
-					<label class="checkbox">
-						<input type="checkbox" ng-checked="collaborator.hasBookingRight"
-							ng-click="toggleBookingRight(collaborator)" />
-						<span></span>
-					</label>
-				</td>
-			</tr>
-		</tbody>
-	</table>
-</div>
