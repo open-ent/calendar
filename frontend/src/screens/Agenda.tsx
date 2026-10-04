@@ -10,7 +10,13 @@ import { AgendaToolbar } from '../features/AgendaToolbar';
 import { DayView, ListView, MonthView, WeekView } from '../features/AgendaViews';
 import { CalendarSidebar } from '../features/CalendarSidebar';
 import { useCalendarVisibility } from '../hooks/useCalendarVisibility';
-import { calendarRights, CalendarRights, eventRights, WORKFLOW } from '../rights';
+import {
+  calendarRights,
+  CalendarRights,
+  CalendarType,
+  eventRights,
+  WORKFLOW,
+} from '../rights';
 import { AgendaView, calendarColor, periodLabel, shiftCursor } from '../utils';
 import { CalendarDialog } from './CalendarDialog';
 import { EventDetails } from './EventDetails';
@@ -45,6 +51,17 @@ export function Agenda() {
   const myGroupIds = useMemo(() => me?.groupsIds ?? [], [me]);
 
   const canCreateCalendar = useHasWorkflow(WORKFLOW.createCalendar) === true;
+  const canCreateStructure = useHasWorkflow(WORKFLOW.createStructureCalendar) === true;
+  const canCreateGroup = useHasWorkflow(WORKFLOW.createGroupCalendar) === true;
+  const canAddExternal = useHasWorkflow(WORKFLOW.importExternalCalendar) === true;
+  const allowedCalendarTypes = useMemo<CalendarType[]>(() => {
+    const types: CalendarType[] = [];
+    if (canCreateStructure) types.push('structure');
+    if (canCreateGroup) types.push('group');
+    return types;
+  }, [canCreateStructure, canCreateGroup]);
+  // Un agenda d'établissement se rattache à la structure de l'usager (la première, comme l'Angular).
+  const myStructureId = (user as { structures?: string[] } | undefined)?.structures?.[0];
 
   const calendarsQuery = useQuery({ queryKey: ['calendar', 'calendars'], queryFn: api.getCalendars });
   const calendars = useMemo(() => calendarsQuery.data ?? [], [calendarsQuery.data]);
@@ -97,13 +114,24 @@ export function Agenda() {
     [calendars, rightsById],
   );
   const notExternal = useMemo(() => calendars.filter((c) => !c.isExternal), [calendars]);
+  // Les agendas typés ont leur propre section (parité avec la barre latérale AngularJS) ;
+  // « Mes agendas » ne garde donc que les agendas personnels dont je suis propriétaire.
+  const structureCalendars = useMemo(
+    () => notExternal.filter((c) => c.type === 'structure'),
+    [notExternal],
+  );
+  const groupCalendars = useMemo(() => notExternal.filter((c) => c.type === 'group'), [notExternal]);
+  const untyped = useMemo(
+    () => notExternal.filter((c) => c.type !== 'structure' && c.type !== 'group'),
+    [notExternal],
+  );
   const myCalendars = useMemo(
-    () => notExternal.filter((c) => !myUserId || c.owner?.userId === myUserId),
-    [notExternal, myUserId],
+    () => untyped.filter((c) => !myUserId || c.owner?.userId === myUserId),
+    [untyped, myUserId],
   );
   const sharedCalendars = useMemo(
-    () => notExternal.filter((c) => myUserId && c.owner?.userId !== myUserId),
-    [notExternal, myUserId],
+    () => untyped.filter((c) => myUserId && c.owner?.userId !== myUserId),
+    [untyped, myUserId],
   );
   const externalCalendars = useMemo(() => calendars.filter((c) => c.isExternal), [calendars]);
 
@@ -233,6 +261,8 @@ export function Agenda() {
       <div className="d-flex flex-fill flex-column flex-lg-row">
         <CalendarSidebar
           myCalendars={myCalendars}
+          structureCalendars={structureCalendars}
+          groupCalendars={groupCalendars}
           sharedCalendars={sharedCalendars}
           externalCalendars={externalCalendars}
           isLoading={calendarsQuery.isLoading}
@@ -247,13 +277,14 @@ export function Agenda() {
           onPortalPublish={setPortalPublishDialog}
           rightsOf={rightsOfCalendar}
           canCreateCalendar={canCreateCalendar}
+          myOwnerId={myUserId}
           externalForm={{
             isOpen: addingExternal,
             title: externalTitle,
             url: externalUrl,
             isPending: externalMut.isPending,
             isError: externalMut.isError,
-            canAdd: canCreateCalendar,
+            canAdd: canAddExternal,
             onOpenChange: setAddingExternal,
             onTitleChange: setExternalTitle,
             onUrlChange: setExternalUrl,
@@ -295,7 +326,14 @@ export function Agenda() {
       {calendarDialog && (
         <CalendarDialog
           calendar={calendarDialog.mode === 'edit' ? calendarDialog.calendar : undefined}
-          onCreated={reveal}
+          allowedTypes={allowedCalendarTypes}
+          structureId={myStructureId}
+          onCreated={(created) => {
+            reveal(created._id);
+            if (created.type === 'structure' || created.type === 'group') {
+              openShare('calendar', created._id, created.title);
+            }
+          }}
           onClose={() => setCalendarDialog(null)}
         />
       )}

@@ -107,6 +107,10 @@ function SidebarSection({
 
 export interface CalendarSidebarProps {
   myCalendars: Calendar[];
+  /** Agendas d'établissement, section dédiée comme dans l'IHM AngularJS. */
+  structureCalendars: Calendar[];
+  /** Agendas de groupe, section dédiée comme dans l'IHM AngularJS. */
+  groupCalendars: Calendar[];
   sharedCalendars: Calendar[];
   externalCalendars: Calendar[];
   isLoading: boolean;
@@ -121,6 +125,8 @@ export interface CalendarSidebarProps {
   rightsOf: (calendar: Calendar) => CalendarRights;
   /** L'usager a-t-il le droit de workflow « créer un agenda » ? */
   canCreateCalendar: boolean;
+  /** Identifiant de l'usager, pour ne pas répéter son nom sur ses propres agendas. */
+  myOwnerId: string;
   /** Formulaire d'ajout d'un agenda externe (flux ICS). */
   externalForm: {
     isOpen: boolean;
@@ -140,6 +146,8 @@ export interface CalendarSidebarProps {
 /** Barre latérale : mes agendas, ceux partagés avec moi, et les flux externes. */
 export function CalendarSidebar({
   myCalendars,
+  structureCalendars,
+  groupCalendars,
   sharedCalendars,
   externalCalendars,
   isLoading,
@@ -152,6 +160,7 @@ export function CalendarSidebar({
   onPortalPublish,
   rightsOf,
   canCreateCalendar,
+  myOwnerId,
   externalForm,
 }: CalendarSidebarProps) {
   const { t } = useTranslation(['calendar', 'common']);
@@ -240,6 +249,44 @@ export function CalendarSidebar({
           </ul>
         )}
       </SidebarSection>
+
+      {structureCalendars.length > 0 && (
+        <SidebarSection
+          title={t('calendar.structure.calendars', { defaultValue: "Agendas de l'établissement" })}
+        >
+          <ul className="list-unstyled m-0">
+            {structureCalendars.map((c) => (
+              <CalendarRow
+                key={c._id}
+                calendar={c}
+                checked={isVisible(c._id)}
+                onToggle={() => onToggle(c._id)}
+                subtitle={c.owner?.userId === myOwnerId ? undefined : c.owner?.displayName}
+                actions={actionsFor(c)}
+              />
+            ))}
+          </ul>
+        </SidebarSection>
+      )}
+
+      {groupCalendars.length > 0 && (
+        <SidebarSection
+          title={t('calendar.group.calendars', { defaultValue: 'Agendas de groupe' })}
+        >
+          <ul className="list-unstyled m-0">
+            {groupCalendars.map((c) => (
+              <CalendarRow
+                key={c._id}
+                calendar={c}
+                checked={isVisible(c._id)}
+                onToggle={() => onToggle(c._id)}
+                subtitle={c.owner?.userId === myOwnerId ? undefined : c.owner?.displayName}
+                actions={actionsFor(c)}
+              />
+            ))}
+          </ul>
+        </SidebarSection>
+      )}
 
       <SidebarSection title={t('calendar.sharedcalendars', { defaultValue: 'Agendas partagés' })}>
         <ul className="list-unstyled m-0">

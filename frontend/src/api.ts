@@ -101,10 +101,30 @@ const mutHeaders = () => ({ ...jsonHeaders, ...xsrfHeader() });
 export const getCalendars = async (): Promise<Calendar[]> =>
   json<Calendar[]>(await fetch('/calendar/calendars', base));
 
-export const createCalendar = async (data: { title: string; color: string }): Promise<Calendar> =>
-  json<Calendar>(
-    await fetch('/calendar/calendars', { ...base, method: 'POST', headers: mutHeaders(), body: JSON.stringify(data) }),
+/**
+ * Crée un agenda. La nature choisie décide de l'endpoint, chacun étant gaté par son propre droit
+ * de workflow côté serveur (`calendar.structure`, `calendar.group`) — exactement comme
+ * `model/Calendar.ts#create()` de l'IHM AngularJS.
+ */
+export interface NewCalendar {
+  title: string;
+  color: string;
+  type?: 'personal' | 'structure' | 'group';
+  /** Requis pour un agenda d'établissement : la structure de rattachement. */
+  structureId?: string;
+}
+
+export const createCalendar = async (data: NewCalendar): Promise<Calendar> => {
+  const url =
+    data.type === 'structure'
+      ? '/calendar/calendars/structure'
+      : data.type === 'group'
+        ? '/calendar/calendars/group'
+        : '/calendar/calendars';
+  return json<Calendar>(
+    await fetch(url, { ...base, method: 'POST', headers: mutHeaders(), body: JSON.stringify(data) }),
   );
+};
 
 /** Ajoute un agenda externe (flux ICS) — l'URL doit correspondre à une plateforme autorisée. */
 export const addExternalCalendar = async (data: { title: string; color: string; icsLink: string }): Promise<void> => {

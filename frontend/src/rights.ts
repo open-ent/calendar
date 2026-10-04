@@ -14,7 +14,16 @@ export const WORKFLOW = {
   createStructureCalendar:
     'net.atos.entng.calendar.controllers.CalendarController|createStructureCalendar',
   createGroupCalendar: 'net.atos.entng.calendar.controllers.CalendarController|createGroupCalendar',
+  /** Ajouter un agenda externe par URL (flux ICS). */
+  importExternalCalendar:
+    'net.atos.entng.calendar.controllers.CalendarController|importExternalCalendar',
+  /** Resynchroniser un agenda externe. */
+  syncExternalCalendar:
+    'net.atos.entng.calendar.controllers.CalendarController|syncExternalCalendar',
 } as const;
+
+/** Les trois natures d'agenda (champ `type` côté serveur). */
+export type CalendarType = 'personal' | 'structure' | 'group';
 
 /** Droits de ressource (clés en tirets, comme dans `shared`). */
 export const RESOURCE = {
