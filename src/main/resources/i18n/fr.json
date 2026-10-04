@@ -300,5 +300,7 @@
   "calendar.view.list": "Liste",
   "calendar.view.month": "Mois",
   "calendar.view.week": "Semaine",
-  "calendar.views": "Vues"
+  "calendar.views": "Vues",
+  "calendar.actions": "Actions",
+  "calendar.event.recurrent.occurrence.only": "Cet événement est récurrent : seule cette occurrence sera modifiée. Utilisez l'ancienne interface pour agir sur toute la récurrence."
 }

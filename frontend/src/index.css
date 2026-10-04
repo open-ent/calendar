@@ -31,7 +31,7 @@
 }
 
 .agenda-day--week {
-  min-height: 24rem;
+  min-height: 18rem;
 }
 
 .agenda-day--outside {
@@ -58,9 +58,21 @@
   filter: brightness(0.92);
 }
 
-/* Filet coloré rappelant l'agenda d'appartenance sur les cartes d'événement. */
-.agenda-event-card {
+/* Filet coloré rappelant l'agenda d'appartenance sur les cartes d'événement.
+   Le sélecteur porte aussi `.card` : le thème pose `[data-product] .card { border-color }`,
+   plus spécifique, qui effacerait la couleur du filet. */
+.card.agenda-event-card {
   border-inline-start: 0.4rem solid var(--agenda-color, var(--openent-primary));
+}
+
+/* En vue Semaine la carte est un bouton : la colonne est trop étroite pour des actions. */
+.agenda-event-card--compact {
+  overflow-wrap: anywhere;
+}
+
+.agenda-event-card--compact:hover,
+.agenda-event-card--compact:focus-visible {
+  background: var(--openent-gray-200);
 }
 
 .agenda-swatch {
@@ -108,4 +120,9 @@
 /* Le libellé de période garde une largeur stable : la navigation ne saute pas d'un mois à l'autre. */
 .agenda-period {
   min-width: 20rem;
+}
+
+/* Toute la ligne d'un agenda est cliquable pour l'afficher ou le masquer. */
+.agenda-calendar-label {
+  cursor: pointer;
 }

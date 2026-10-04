@@ -81,6 +81,7 @@ export function WeekView({ cursor, events, colorOf, onEdit, onShare, onDelete }:
                 key={e._id}
                 event={e}
                 color={colorOf(e)}
+                compact
                 onEdit={() => onEdit(e)}
                 onShare={() => onShare(e)}
                 onDelete={() => onDelete(e)}

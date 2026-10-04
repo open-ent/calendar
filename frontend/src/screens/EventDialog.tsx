@@ -49,7 +49,10 @@ export function EventDialog({
         startMoment: localInputToIsoUtc(start),
         endMoment: localInputToIsoUtc(end),
         allday,
-        isRecurrent: false,
+        // La récurrence n'est pas encore éditable ici : on REPORTE la valeur existante.
+        // Le backend fait un $set aveugle de chaque champ du corps — forcer `false`
+        // détacherait l'événement de sa récurrence (cf. EventHelper#isRecurrent).
+        isRecurrent: event?.isRecurrent ?? false,
         calendar: [calendarId],
         location: location.trim(),
         description: description.trim(),
@@ -87,6 +90,14 @@ export function EventDialog({
           : t('calendar.event.new', { defaultValue: 'Nouvel événement' })}
       </Modal.Header>
       <Modal.Body>
+        {event?.isRecurrent && (
+          <Alert type="info" className="mb-16">
+            {t('calendar.event.recurrent.occurrence.only', {
+              defaultValue:
+                "Cet événement est récurrent : seule cette occurrence sera modifiée. Utilisez l'ancienne interface pour agir sur toute la récurrence.",
+            })}
+          </Alert>
+        )}
         <FormControl id="event-title" isRequired className="mb-16">
           <Label>{t('calendar.event.title', { defaultValue: 'Titre' })}</Label>
           <Input type="text" size="md" value={title} autoFocus onChange={(e) => setTitle(e.target.value)} />

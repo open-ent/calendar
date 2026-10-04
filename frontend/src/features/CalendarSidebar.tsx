@@ -1,21 +1,35 @@
 import {
   Button,
   Checkbox,
+  Dropdown,
   FormControl,
   Heading,
-  IconButton,
   Input,
   Label,
-  Tooltip,
 } from '@open-ent/react';
-import { IconDelete, IconEdit, IconGlobe, IconPlus, IconShare } from '@open-ent/react/icons';
+import {
+  IconDelete,
+  IconEdit,
+  IconGlobe,
+  IconOptions,
+  IconPlus,
+  IconShare,
+} from '@open-ent/react/icons';
 import { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Calendar } from '../api';
 import { calendarColor } from '../utils';
 
-/** Une ligne d'agenda : case à cocher (visibilité), pastille de couleur, titre, actions. */
+/** Une action du menu d'un agenda. */
+interface RowAction {
+  key: string;
+  label: string;
+  icon: JSX.Element;
+  onClick: () => void;
+}
+
+/** Une ligne d'agenda : case à cocher (visibilité), pastille de couleur, titre, menu d'actions. */
 function CalendarRow({
   calendar,
   checked,
@@ -27,11 +41,13 @@ function CalendarRow({
   checked: boolean;
   onToggle: () => void;
   subtitle?: string;
-  actions?: ReactNode;
+  actions: RowAction[];
 }) {
+  const { t } = useTranslation(['calendar', 'common']);
+
   return (
-    <li className="d-flex align-items-center justify-content-between gap-8 py-4">
-      <div className="d-flex align-items-center gap-8 overflow-hidden">
+    <li className="d-flex align-items-center justify-content-between gap-4 py-4">
+      <label className="agenda-calendar-label d-flex align-items-center gap-8 overflow-hidden m-0">
         <Checkbox checked={checked} onChange={onToggle} aria-label={calendar.title} />
         <span
           aria-hidden="true"
@@ -42,8 +58,27 @@ function CalendarRow({
           {calendar.title}
           {subtitle && <span className="small text-gray-700"> ({subtitle})</span>}
         </span>
-      </div>
-      {actions && <div className="d-flex gap-2 flex-shrink-0">{actions}</div>}
+      </label>
+      {actions.length > 0 && (
+        <div className="flex-shrink-0">
+          <Dropdown placement="bottom-end">
+            <Dropdown.Trigger
+              variant="ghost"
+              size="sm"
+              hideCarret
+              icon={<IconOptions />}
+              aria-label={`${t('calendar.actions', { defaultValue: 'Actions' })} : ${calendar.title}`}
+            />
+            <Dropdown.Menu>
+              {actions.map((a) => (
+                <Dropdown.Item key={a.key} icon={a.icon} onClick={a.onClick}>
+                  {a.label}
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Menu>
+          </Dropdown>
+        </div>
+      )}
     </li>
   );
 }
@@ -60,13 +95,11 @@ function SidebarSection({
 }) {
   return (
     <section className="mb-24">
-      <div className="d-flex align-items-center justify-content-between gap-8 mb-8">
-        <Heading level="h2" headingStyle="h5" className="m-0">
-          {title}
-        </Heading>
-        {action}
-      </div>
+      <Heading level="h2" headingStyle="h5" className="mb-8">
+        {title}
+      </Heading>
       {children}
+      {action && <div className="mt-8">{action}</div>}
     </section>
   );
 }
@@ -119,6 +152,33 @@ export function CalendarSidebar({
     defaultValue: 'Publier sur le portail public',
   });
 
+  const publishAction = (c: Calendar): RowAction[] =>
+    c.type === 'structure'
+      ? [{ key: 'publish', label: publishLabel, icon: <IconGlobe />, onClick: () => onPortalPublish(c) }]
+      : [];
+
+  const ownerActions = (c: Calendar): RowAction[] => [
+    ...publishAction(c),
+    {
+      key: 'share',
+      label: t('calendar.share', { defaultValue: 'Partager' }),
+      icon: <IconShare />,
+      onClick: () => onShare(c),
+    },
+    {
+      key: 'edit',
+      label: t('calendar.edit', { defaultValue: "Éditer un agenda" }),
+      icon: <IconEdit />,
+      onClick: () => onEdit(c),
+    },
+    {
+      key: 'delete',
+      label: t('calendar.delete', { defaultValue: 'Supprimer' }),
+      icon: <IconDelete />,
+      onClick: () => onDelete(c),
+    },
+  ];
+
   const submitExternal = (e: FormEvent) => {
     e.preventDefault();
     if (externalForm.title.trim() && externalForm.url.trim()) externalForm.onSubmit();
@@ -137,7 +197,7 @@ export function CalendarSidebar({
             leftIcon={<IconPlus />}
             onClick={onCreate}
           >
-            {t('calendar.new', { defaultValue: 'Nouveau' })}
+            {t('calendar.new', { defaultValue: 'Créer un agenda' })}
           </Button>
         }
       >
@@ -147,65 +207,14 @@ export function CalendarSidebar({
           </p>
         ) : (
           <ul className="list-unstyled m-0">
-            {myCalendars.length === 0 && (
-              <li className="small text-gray-700">{emptyLabel}</li>
-            )}
+            {myCalendars.length === 0 && <li className="small text-gray-700">{emptyLabel}</li>}
             {myCalendars.map((c) => (
               <CalendarRow
                 key={c._id}
                 calendar={c}
                 checked={!hidden.has(c._id)}
                 onToggle={() => onToggle(c._id)}
-                actions={
-                  <>
-                    {c.type === 'structure' && (
-                      <Tooltip message={publishLabel} placement="top">
-                        <IconButton
-                          type="button"
-                          color="tertiary"
-                          variant="ghost"
-                          size="sm"
-                          icon={<IconGlobe />}
-                          aria-label={`${publishLabel} ${c.title}`}
-                          onClick={() => onPortalPublish(c)}
-                        />
-                      </Tooltip>
-                    )}
-                    <Tooltip message={t('calendar.share', { defaultValue: 'Partager' })} placement="top">
-                      <IconButton
-                        type="button"
-                        color="tertiary"
-                        variant="ghost"
-                        size="sm"
-                        icon={<IconShare />}
-                        aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} ${c.title}`}
-                        onClick={() => onShare(c)}
-                      />
-                    </Tooltip>
-                    <Tooltip message={t('calendar.edit', { defaultValue: 'Modifier' })} placement="top">
-                      <IconButton
-                        type="button"
-                        color="tertiary"
-                        variant="ghost"
-                        size="sm"
-                        icon={<IconEdit />}
-                        aria-label={`${t('calendar.edit', { defaultValue: 'Modifier' })} ${c.title}`}
-                        onClick={() => onEdit(c)}
-                      />
-                    </Tooltip>
-                    <Tooltip message={t('calendar.delete', { defaultValue: 'Supprimer' })} placement="top">
-                      <IconButton
-                        type="button"
-                        color="danger"
-                        variant="ghost"
-                        size="sm"
-                        icon={<IconDelete />}
-                        aria-label={`${t('calendar.delete', { defaultValue: 'Supprimer' })} ${c.title}`}
-                        onClick={() => onDelete(c)}
-                      />
-                    </Tooltip>
-                  </>
-                }
+                actions={ownerActions(c)}
               />
             ))}
           </ul>
@@ -222,21 +231,7 @@ export function CalendarSidebar({
               checked={!hidden.has(c._id)}
               onToggle={() => onToggle(c._id)}
               subtitle={c.owner?.displayName}
-              actions={
-                c.type === 'structure' ? (
-                  <Tooltip message={publishLabel} placement="top">
-                    <IconButton
-                      type="button"
-                      color="tertiary"
-                      variant="ghost"
-                      size="sm"
-                      icon={<IconGlobe />}
-                      aria-label={`${publishLabel} ${c.title}`}
-                      onClick={() => onPortalPublish(c)}
-                    />
-                  </Tooltip>
-                ) : null
-              }
+              actions={publishAction(c)}
             />
           ))}
         </ul>
@@ -245,20 +240,42 @@ export function CalendarSidebar({
       <SidebarSection
         title={t('calendar.externalcalendars', { defaultValue: 'Agendas externes' })}
         action={
-          <Button
-            type="button"
-            color="tertiary"
-            variant="ghost"
-            size="sm"
-            leftIcon={<IconPlus />}
-            onClick={() => externalForm.onOpenChange(!externalForm.isOpen)}
-          >
-            {t('calendar.external.add', { defaultValue: 'Ajouter' })}
-          </Button>
+          !externalForm.isOpen && (
+            <Button
+              type="button"
+              color="tertiary"
+              variant="ghost"
+              size="sm"
+              leftIcon={<IconPlus />}
+              onClick={() => externalForm.onOpenChange(true)}
+            >
+              {t('calendar.add.external.calendar', { defaultValue: 'Ajouter un agenda externe' })}
+            </Button>
+          )
         }
       >
+        <ul className="list-unstyled m-0">
+          {externalCalendars.length === 0 && <li className="small text-gray-700">{emptyLabel}</li>}
+          {externalCalendars.map((c) => (
+            <CalendarRow
+              key={c._id}
+              calendar={c}
+              checked={!hidden.has(c._id)}
+              onToggle={() => onToggle(c._id)}
+              actions={[
+                {
+                  key: 'delete',
+                  label: t('calendar.delete', { defaultValue: 'Supprimer' }),
+                  icon: <IconDelete />,
+                  onClick: () => onDelete(c),
+                },
+              ]}
+            />
+          ))}
+        </ul>
+
         {externalForm.isOpen && (
-          <form className="mb-12 d-flex flex-column gap-8" onSubmit={submitExternal}>
+          <form className="mt-12 d-flex flex-column gap-8" onSubmit={submitExternal}>
             <FormControl id="external-title">
               <Label>{t('calendar.external.title', { defaultValue: "Titre de l'agenda" })}</Label>
               <Input
@@ -284,42 +301,29 @@ export function CalendarSidebar({
                 })}
               </p>
             )}
-            <Button
-              type="submit"
-              color="primary"
-              variant="filled"
-              size="sm"
-              isLoading={externalForm.isPending}
-              disabled={!externalForm.title.trim() || !externalForm.url.trim()}
-            >
-              {t('calendar.external.save', { defaultValue: "Ajouter l'agenda externe" })}
-            </Button>
+            <div className="d-flex gap-8">
+              <Button
+                type="submit"
+                color="primary"
+                variant="filled"
+                size="sm"
+                isLoading={externalForm.isPending}
+                disabled={!externalForm.title.trim() || !externalForm.url.trim()}
+              >
+                {t('calendar.add', { defaultValue: "Ajouter l'agenda" })}
+              </Button>
+              <Button
+                type="button"
+                color="tertiary"
+                variant="ghost"
+                size="sm"
+                onClick={() => externalForm.onOpenChange(false)}
+              >
+                {t('calendar.cancel', { defaultValue: 'Annuler' })}
+              </Button>
+            </div>
           </form>
         )}
-        <ul className="list-unstyled m-0">
-          {externalCalendars.length === 0 && <li className="small text-gray-700">{emptyLabel}</li>}
-          {externalCalendars.map((c) => (
-            <CalendarRow
-              key={c._id}
-              calendar={c}
-              checked={!hidden.has(c._id)}
-              onToggle={() => onToggle(c._id)}
-              actions={
-                <Tooltip message={t('calendar.delete', { defaultValue: 'Supprimer' })} placement="top">
-                  <IconButton
-                    type="button"
-                    color="danger"
-                    variant="ghost"
-                    size="sm"
-                    icon={<IconDelete />}
-                    aria-label={`${t('calendar.delete', { defaultValue: 'Supprimer' })} ${c.title}`}
-                    onClick={() => onDelete(c)}
-                  />
-                </Tooltip>
-              }
-            />
-          ))}
-        </ul>
       </SidebarSection>
     </aside>
   );
