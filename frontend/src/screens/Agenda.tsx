@@ -1,35 +1,52 @@
-import { useEdificeClient } from '@open-ent/react';
+import { AppHeader, Breadcrumb, Button, useEdificeClient } from '@open-ent/react';
+import { IconPlus } from '@open-ent/react/icons';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { api, Calendar, CalendarEvent } from '../api';
-import { calendarColor, isoTime, isSameDay, isSameMonth, monthGrid, startOfWeek, weekDays } from '../utils';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { AgendaToolbar } from '../features/AgendaToolbar';
+import { DayView, ListView, MonthView, WeekView } from '../features/AgendaViews';
+import { CalendarSidebar } from '../features/CalendarSidebar';
+import { AgendaView, calendarColor, periodLabel, shiftCursor } from '../utils';
 import { CalendarDialog } from './CalendarDialog';
 import { EventDialog } from './EventDialog';
 import { PortalPublishDialog } from './PortalPublishDialog';
 import { ShareDialog } from './ShareDialog';
 
-const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+/** Couleur attribuée d'office à un agenda externe ajouté par URL. */
+const EXTERNAL_CALENDAR_COLOR = '#e63b3b';
 
-type View = 'day' | 'week' | 'month' | 'list';
 type EventDialogState = { event?: CalendarEvent; defaultCalendarId?: string } | null;
 type CalendarDialogState = { mode: 'new' } | { mode: 'edit'; calendar: Calendar } | null;
-type ShareDialogState = { resourceId: string; resourceName: string; title: string; kind: 'calendar' | 'event' } | null;
+type ShareDialogState = {
+  resourceId: string;
+  resourceName: string;
+  title: string;
+  kind: 'calendar' | 'event';
+} | null;
+type ConfirmState =
+  | { kind: 'calendar'; calendar: Calendar }
+  | { kind: 'external'; calendar: Calendar }
+  | { kind: 'event'; event: CalendarEvent }
+  | null;
 
-/** Agenda : barre latérale des calendriers + vue Jour / Semaine / Mois des événements. */
+/** Agenda : barre latérale des agendas + vues Jour / Semaine / Mois / Liste des événements. */
 export function Agenda() {
   const { t } = useTranslation(['calendar', 'common']);
   const qc = useQueryClient();
-  const { user } = useEdificeClient();
+  const { currentApp, user } = useEdificeClient();
   const myUserId = (user as { userId?: string } | undefined)?.userId ?? '';
 
   const calendarsQuery = useQuery({ queryKey: ['calendar', 'calendars'], queryFn: api.getCalendars });
   const calendars = useMemo(() => calendarsQuery.data ?? [], [calendarsQuery.data]);
 
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const visibleCalendars = calendars.filter((c) => !hidden.has(c._id));
+  const visibleCalendars = useMemo(
+    () => calendars.filter((c) => !hidden.has(c._id)),
+    [calendars, hidden],
+  );
 
   const eventQueries = useQueries({
     queries: visibleCalendars.map((c) => ({
@@ -37,35 +54,50 @@ export function Agenda() {
       queryFn: () => api.getEvents(c._id),
     })),
   });
-  const colorById = useMemo(() => {
-    const m = new Map<string, string>();
-    calendars.forEach((c) => m.set(c._id, calendarColor(c.color)));
-    return m;
-  }, [calendars]);
   const events: CalendarEvent[] = useMemo(
     () => eventQueries.flatMap((q) => (q.data as CalendarEvent[] | undefined) ?? []),
     [eventQueries],
   );
 
-  const [view, setView] = useState<View>('week');
+  const colorById = useMemo(() => {
+    const m = new Map<string, string>();
+    calendars.forEach((c) => m.set(c._id, calendarColor(c.color)));
+    return m;
+  }, [calendars]);
+  const colorOf = (e: CalendarEvent) => colorById.get(e.calendar?.[0]) ?? calendarColor();
+
+  // Les agendas externes (flux ICS) sont en lecture seule : exclus de toute écriture.
+  const writableCalendars = useMemo(() => calendars.filter((c) => !c.isExternal), [calendars]);
+  const myCalendars = useMemo(
+    () => writableCalendars.filter((c) => !myUserId || c.owner?.userId === myUserId),
+    [writableCalendars, myUserId],
+  );
+  const sharedCalendars = useMemo(
+    () => writableCalendars.filter((c) => myUserId && c.owner?.userId !== myUserId),
+    [writableCalendars, myUserId],
+  );
+  const externalCalendars = useMemo(() => calendars.filter((c) => c.isExternal), [calendars]);
+
+  const [view, setView] = useState<AgendaView>('week');
   const [cursor, setCursor] = useState(() => new Date());
 
-  const shift = (dir: number) => {
-    const d = new Date(cursor);
-    if (view === 'day') d.setDate(d.getDate() + dir);
-    else if (view === 'week' || view === 'list') d.setDate(d.getDate() + dir * 7);
-    else d.setMonth(d.getMonth() + dir);
-    setCursor(d);
-  };
-
   const [eventDialog, setEventDialog] = useState<EventDialogState>(null);
+  const [calendarDialog, setCalendarDialog] = useState<CalendarDialogState>(null);
+  const [shareDialog, setShareDialog] = useState<ShareDialogState>(null);
+  const [portalPublishDialog, setPortalPublishDialog] = useState<Calendar | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   // Ajout d'un agenda externe (flux ICS, URL sur liste blanche des plateformes).
   const [addingExternal, setAddingExternal] = useState(false);
   const [externalTitle, setExternalTitle] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
   const externalMut = useMutation({
-    mutationFn: () => api.addExternalCalendar({ title: externalTitle.trim(), color: '#e63b3b', icsLink: externalUrl.trim() }),
+    mutationFn: () =>
+      api.addExternalCalendar({
+        title: externalTitle.trim(),
+        color: EXTERNAL_CALENDAR_COLOR,
+        icsLink: externalUrl.trim(),
+      }),
     onSuccess: () => {
       setAddingExternal(false);
       setExternalTitle('');
@@ -73,17 +105,20 @@ export function Agenda() {
       qc.invalidateQueries({ queryKey: ['calendar'] });
     },
   });
-  const [calendarDialog, setCalendarDialog] = useState<CalendarDialogState>(null);
-  const [shareDialog, setShareDialog] = useState<ShareDialogState>(null);
-  const [portalPublishDialog, setPortalPublishDialog] = useState<Calendar | null>(null);
 
   const deleteCalMut = useMutation({
     mutationFn: (id: string) => api.deleteCalendar(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['calendar', 'calendars'] }),
+    onSuccess: () => {
+      setConfirm(null);
+      qc.invalidateQueries({ queryKey: ['calendar'] });
+    },
   });
   const deleteEventMut = useMutation({
     mutationFn: ({ calId, evId }: { calId: string; evId: string }) => api.deleteEvent(calId, evId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['calendar', 'events'] }),
+    onSuccess: () => {
+      setConfirm(null);
+      qc.invalidateQueries({ queryKey: ['calendar', 'events'] });
+    },
   });
 
   const toggleHidden = (id: string) =>
@@ -94,55 +129,133 @@ export function Agenda() {
       return next;
     });
 
-  const eventsOfDay = (day: Date) =>
-    events.filter((e) => isSameDay(e.startMoment, day)).sort((a, b) => a.startMoment.localeCompare(b.startMoment));
+  const openShare = (kind: 'calendar' | 'event', id: string, name: string) =>
+    setShareDialog({
+      resourceId: id,
+      resourceName: name,
+      kind,
+      title:
+        kind === 'calendar'
+          ? t('calendar.share.title', { defaultValue: "Partager l'agenda" })
+          : t('calendar.event.share.title', { defaultValue: "Partager l'événement" }),
+    });
 
-  // Étiquette de période selon la vue.
-  const periodLabel = useMemo(() => {
-    if (view === 'day') return cursor.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-    if (view === 'month') return cursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-    const days = weekDays(startOfWeek(cursor));
-    return `${days[0].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} – ${days[6].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}`;
-  }, [view, cursor]);
+  const viewHandlers = {
+    colorOf,
+    onEdit: (event: CalendarEvent) => setEventDialog({ event }),
+    onShare: (event: CalendarEvent) => openShare('event', event._id, event.title),
+    onDelete: (event: CalendarEvent) => setConfirm({ kind: 'event', event }),
+  };
+  const viewProps = { cursor, events, ...viewHandlers };
 
-  /** Carte d'événement (compacte). */
-  const EventCard = ({ e }: { e: CalendarEvent }) => (
-    <div className="rounded p-4 mb-4" style={{ background: '#fff', borderLeft: `4px solid ${colorById.get(e.calendar?.[0]) ?? '#2a9cc8'}`, border: '1px solid #e0e0e0', fontSize: 12 }}>
-      <div className="d-flex justify-content-between align-items-start gap-4">
-        <strong>{e.allday ? t('calendar.event.allday.short', { defaultValue: 'Journée' }) : isoTime(e.startMoment)}</strong>
-        <span className="d-flex gap-4">
-          <button type="button" className="btn btn-link p-0" style={{ fontSize: 11 }} aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} ${e.title}`} onClick={() => setShareDialog({ resourceId: e._id, resourceName: e.title, title: t('calendar.event.share.title', { defaultValue: "Partager l'événement" }), kind: 'event' })}>
-            ⇄
-          </button>
-          <button type="button" className="btn btn-link p-0" style={{ fontSize: 11 }} aria-label={`${t('calendar.edit', { defaultValue: 'Modifier' })} ${e.title}`} onClick={() => setEventDialog({ event: e })}>
-            ✎
-          </button>
-          <button
-            type="button"
-            className="btn btn-link p-0 text-danger"
-            style={{ fontSize: 11 }}
-            aria-label={`${t('calendar.delete', { defaultValue: 'Supprimer' })} ${e.title}`}
-            onClick={() => {
-              if (window.confirm(t('calendar.event.confirm.delete', { defaultValue: 'Supprimer cet événement ?' })))
-                deleteEventMut.mutate({ calId: e.calendar[0], evId: e._id });
-            }}
-          >
-            ✕
-          </button>
-        </span>
-      </div>
-      <div>{e.title}</div>
-    </div>
-  );
+  const confirmTexts = () => {
+    if (!confirm) return null;
+    if (confirm.kind === 'event') {
+      return {
+        title: t('calendar.event.delete.title', { defaultValue: "Supprimer l'événement" }),
+        text: t('calendar.event.confirm.delete', { defaultValue: 'Supprimer cet événement ?' }),
+        isLoading: deleteEventMut.isPending,
+        onConfirm: () =>
+          deleteEventMut.mutate({ calId: confirm.event.calendar[0], evId: confirm.event._id }),
+      };
+    }
+    return {
+      title:
+        confirm.kind === 'external'
+          ? t('calendar.external.delete.title', { defaultValue: "Supprimer l'agenda externe" })
+          : t('calendar.delete.title', { defaultValue: "Supprimer l'agenda" }),
+      text:
+        confirm.kind === 'external'
+          ? t('calendar.external.confirm.delete', { defaultValue: 'Supprimer cet agenda externe ?' })
+          : t('calendar.confirm.delete', {
+              defaultValue: 'Supprimer cet agenda et tous ses événements ?',
+            }),
+      isLoading: deleteCalMut.isPending,
+      onConfirm: () => deleteCalMut.mutate(confirm.calendar._id),
+    };
+  };
+  const confirmProps = confirmTexts();
 
   return (
-    <div>
+    <>
+      <AppHeader
+        render={() => (
+          <Button
+            type="button"
+            color="primary"
+            variant="filled"
+            leftIcon={<IconPlus />}
+            disabled={writableCalendars.length === 0}
+            onClick={() =>
+              setEventDialog({
+                defaultCalendarId: visibleCalendars.find((c) => !c.isExternal)?._id,
+              })
+            }
+          >
+            {t('calendar.event.new', { defaultValue: 'Nouvel événement' })}
+          </Button>
+        )}
+      >
+        {currentApp && <Breadcrumb app={currentApp} />}
+      </AppHeader>
+
+      <div className="d-flex flex-fill flex-column flex-lg-row">
+        <CalendarSidebar
+          myCalendars={myCalendars}
+          sharedCalendars={sharedCalendars}
+          externalCalendars={externalCalendars}
+          isLoading={calendarsQuery.isLoading}
+          hidden={hidden}
+          onToggle={toggleHidden}
+          onCreate={() => setCalendarDialog({ mode: 'new' })}
+          onEdit={(calendar) => setCalendarDialog({ mode: 'edit', calendar })}
+          onShare={(calendar) => openShare('calendar', calendar._id, calendar.title)}
+          onDelete={(calendar) =>
+            setConfirm({ kind: calendar.isExternal ? 'external' : 'calendar', calendar })
+          }
+          onPortalPublish={setPortalPublishDialog}
+          externalForm={{
+            isOpen: addingExternal,
+            title: externalTitle,
+            url: externalUrl,
+            isPending: externalMut.isPending,
+            isError: externalMut.isError,
+            onOpenChange: setAddingExternal,
+            onTitleChange: setExternalTitle,
+            onUrlChange: setExternalUrl,
+            onSubmit: () => externalMut.mutate(),
+          }}
+        />
+
+        <div className="flex-fill py-16 ps-lg-16 d-flex flex-column overflow-hidden">
+          <AgendaToolbar
+            view={view}
+            periodLabel={periodLabel(cursor, view)}
+            onViewChange={setView}
+            onShift={(direction) => setCursor(shiftCursor(cursor, view, direction))}
+            onToday={() => setCursor(new Date())}
+          />
+
+          {view === 'day' && <DayView {...viewProps} />}
+          {view === 'week' && <WeekView {...viewProps} />}
+          {view === 'month' && <MonthView {...viewProps} />}
+          {view === 'list' && <ListView {...viewProps} />}
+        </div>
+      </div>
+
       {eventDialog && (
-        // Les agendas externes (flux ICS) sont en lecture seule : exclus du choix d'écriture.
-        <EventDialog calendars={calendars.filter((c) => !c.isExternal)} event={eventDialog.event} defaultCalendarId={eventDialog.defaultCalendarId} onClose={() => setEventDialog(null)} />
+        <EventDialog
+          calendars={writableCalendars}
+          event={eventDialog.event}
+          defaultCalendarId={eventDialog.defaultCalendarId}
+          onClose={() => setEventDialog(null)}
+        />
       )}
       {calendarDialog && (
-        <CalendarDialog calendar={calendarDialog.mode === 'edit' ? calendarDialog.calendar : undefined} onClose={() => setCalendarDialog(null)} />
+        <CalendarDialog
+          calendar={calendarDialog.mode === 'edit' ? calendarDialog.calendar : undefined}
+          onClose={() => setCalendarDialog(null)}
+        />
       )}
       {shareDialog && (
         <ShareDialog
@@ -154,235 +267,22 @@ export function Agenda() {
           onClose={() => setShareDialog(null)}
         />
       )}
-      {portalPublishDialog && <PortalPublishDialog calendar={portalPublishDialog} onClose={() => setPortalPublishDialog(null)} />}
-
-      <div className="d-flex align-items-center justify-content-between mb-16">
-        <h1 className="m-0">{t('calendar.title', { defaultValue: 'Agenda' })}</h1>
-        <button type="button" className="btn btn-primary" disabled={calendars.filter((c) => !c.isExternal).length === 0} onClick={() => setEventDialog({ defaultCalendarId: visibleCalendars.filter((c) => !c.isExternal)[0]?._id })}>
-          {t('calendar.event.new', { defaultValue: 'Nouvel événement' })}
-        </button>
-      </div>
-
-      <div className="d-flex gap-16" style={{ alignItems: 'flex-start' }}>
-        {/* Barre latérale */}
-        <aside style={{ minWidth: 220 }}>
-          <div className="d-flex align-items-center justify-content-between mb-8">
-            <strong>{t('calendar.mycalendars', { defaultValue: 'Mes calendriers' })}</strong>
-            <button type="button" className="btn btn-link p-0" onClick={() => setCalendarDialog({ mode: 'new' })}>
-              + {t('calendar.new', { defaultValue: 'Nouveau' })}
-            </button>
-          </div>
-          {calendarsQuery.isLoading && <p>{t('calendar.loading', { defaultValue: 'Chargement…' })}</p>}
-          <ul className="list-unstyled">
-            {calendars.filter((c) => !c.isExternal && (!myUserId || c.owner?.userId === myUserId)).map((c) => (
-              <li key={c._id} className="d-flex align-items-center justify-content-between py-4">
-                <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
-                  <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
-                  <span aria-hidden style={{ width: 12, height: 12, borderRadius: 3, background: calendarColor(c.color), display: 'inline-block' }} />
-                  {c.title}
-                </label>
-                <span className="d-flex gap-4">
-                  {c.type === 'structure' && (
-                    <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.portalpublish.title', { defaultValue: 'Publier sur le portail public' })} ${c.title}`} onClick={() => setPortalPublishDialog(c)}>
-                      🌐
-                    </button>
-                  )}
-                  <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} ${c.title}`} onClick={() => setShareDialog({ resourceId: c._id, resourceName: c.title, title: t('calendar.share.title', { defaultValue: 'Partager le calendrier' }), kind: 'calendar' })}>
-                    ⇄
-                  </button>
-                  <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.edit', { defaultValue: 'Modifier' })} ${c.title}`} onClick={() => setCalendarDialog({ mode: 'edit', calendar: c })}>
-                    ✎
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-link p-0 text-danger"
-                    aria-label={`${t('calendar.delete', { defaultValue: 'Supprimer' })} ${c.title}`}
-                    onClick={() => {
-                      if (window.confirm(t('calendar.confirm.delete', { defaultValue: 'Supprimer ce calendrier et ses événements ?' }))) deleteCalMut.mutate(c._id);
-                    }}
-                  >
-                    ✕
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          {/* Agendas partagés avec moi (parité Angular : section distincte, lecture) */}
-          <div className="mt-16">
-            <strong>{t('calendar.sharedcalendars', { defaultValue: 'Agendas partagés' })}</strong>
-            <ul className="list-unstyled mt-8">
-              {calendars.filter((c) => !c.isExternal && myUserId && c.owner?.userId !== myUserId).length === 0 && (
-                <li className="text-muted" style={{ fontSize: 13 }}>{t('calendar.shared.none', { defaultValue: "Pas d'agenda" })}</li>
-              )}
-              {calendars.filter((c) => !c.isExternal && myUserId && c.owner?.userId !== myUserId).map((c) => (
-                <li key={c._id} className="d-flex align-items-center justify-content-between py-4">
-                  <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
-                    <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
-                    <span aria-hidden style={{ width: 12, height: 12, borderRadius: 3, background: calendarColor(c.color), display: 'inline-block' }} />
-                    {c.title}
-                    {c.owner?.displayName && <span className="text-muted" style={{ fontSize: 12 }}>({c.owner.displayName})</span>}
-                  </label>
-                  {c.type === 'structure' && (
-                    <button type="button" className="btn btn-link p-0" aria-label={`${t('calendar.portalpublish.title', { defaultValue: 'Publier sur le portail public' })} ${c.title}`} onClick={() => setPortalPublishDialog(c)}>
-                      🌐
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Agendas externes (flux ICS synchronisés — parité Angular « Ajouter un agenda externe ») */}
-          <div className="mt-16">
-            <div className="d-flex align-items-center justify-content-between">
-              <strong>{t('calendar.externalcalendars', { defaultValue: 'Agendas externes' })}</strong>
-              <button type="button" className="btn btn-link p-0" onClick={() => setAddingExternal((v) => !v)}>
-                + {t('calendar.external.add', { defaultValue: 'Ajouter' })}
-              </button>
-            </div>
-            {addingExternal && (
-              <form
-                className="mt-8 d-flex flex-column gap-8"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (externalTitle.trim() && externalUrl.trim()) externalMut.mutate();
-                }}
-              >
-                <input
-                  type="text"
-                  className="form-control form-control-sm"
-                  placeholder={t('calendar.external.title', { defaultValue: "Titre de l'agenda" })}
-                  aria-label={t('calendar.external.title', { defaultValue: "Titre de l'agenda" })}
-                  value={externalTitle}
-                  onChange={(e) => setExternalTitle(e.target.value)}
-                />
-                <input
-                  type="url"
-                  className="form-control form-control-sm"
-                  placeholder={t('calendar.external.url', { defaultValue: 'URL du flux ICS' })}
-                  aria-label={t('calendar.external.url', { defaultValue: 'URL du flux ICS' })}
-                  value={externalUrl}
-                  onChange={(e) => setExternalUrl(e.target.value)}
-                />
-                {externalMut.isError && (
-                  <div className="text-danger" style={{ fontSize: 12 }}>
-                    {t('calendar.external.error', { defaultValue: 'Ajout refusé (URL non autorisée par la plateforme ?).' })}
-                  </div>
-                )}
-                <button type="submit" className="btn btn-primary btn-sm" disabled={!externalTitle.trim() || !externalUrl.trim() || externalMut.isPending}>
-                  {t('calendar.external.save', { defaultValue: 'Ajouter l’agenda externe' })}
-                </button>
-              </form>
-            )}
-            <ul className="list-unstyled mt-8">
-              {calendars.filter((c) => c.isExternal).length === 0 && (
-                <li className="text-muted" style={{ fontSize: 13 }}>{t('calendar.external.none', { defaultValue: "Pas d'agenda" })}</li>
-              )}
-              {calendars.filter((c) => c.isExternal).map((c) => (
-                <li key={c._id} className="d-flex align-items-center justify-content-between py-4">
-                  <label className="d-flex align-items-center gap-8 m-0" style={{ cursor: 'pointer' }}>
-                    <input type="checkbox" checked={!hidden.has(c._id)} aria-label={c.title} onChange={() => toggleHidden(c._id)} />
-                    <span aria-hidden style={{ width: 12, height: 12, borderRadius: 3, background: calendarColor(c.color), display: 'inline-block' }} />
-                    {c.title}
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-link p-0 text-danger"
-                    aria-label={`${t('calendar.delete', { defaultValue: 'Supprimer' })} ${c.title}`}
-                    onClick={() => {
-                      if (window.confirm(t('calendar.external.confirm.delete', { defaultValue: 'Supprimer cet agenda externe ?' }))) deleteCalMut.mutate(c._id);
-                    }}
-                  >
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </aside>
-
-        {/* Zone de vue */}
-        <div className="flex-grow-1">
-          <div className="d-flex align-items-center justify-content-between mb-16 flex-wrap gap-8">
-            <div className="btn-group" role="group" aria-label={t('calendar.views', { defaultValue: 'Vues' })}>
-              {(['day', 'week', 'month', 'list'] as View[]).map((v) => (
-                <button key={v} type="button" className={`btn btn-sm ${view === v ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={view === v} onClick={() => setView(v)}>
-                  {v === 'day' ? t('calendar.view.day', { defaultValue: 'Jour' }) : v === 'week' ? t('calendar.view.week', { defaultValue: 'Semaine' }) : v === 'month' ? t('calendar.view.month', { defaultValue: 'Mois' }) : t('calendar.view.list', { defaultValue: 'Liste' })}
-                </button>
-              ))}
-            </div>
-            <div className="d-flex align-items-center gap-12">
-              <button type="button" className="btn btn-link" onClick={() => shift(-1)} aria-label={t('calendar.prev', { defaultValue: 'Précédent' })}>←</button>
-              <strong style={{ minWidth: 180, textAlign: 'center', textTransform: 'capitalize' }}>{periodLabel}</strong>
-              <button type="button" className="btn btn-link" onClick={() => shift(1)} aria-label={t('calendar.next', { defaultValue: 'Suivant' })}>→</button>
-              <button type="button" className="btn btn-link" onClick={() => setCursor(new Date())}>{t('calendar.today', { defaultValue: "Aujourd'hui" })}</button>
-            </div>
-          </div>
-
-          {/* Vue Jour */}
-          {view === 'day' && (
-            <div className="border rounded p-12" style={{ minHeight: 200, background: '#fafafa' }}>
-              {eventsOfDay(cursor).length === 0 ? (
-                <p className="text-muted m-0">{t('calendar.noevents', { defaultValue: 'Aucun événement ce jour.' })}</p>
-              ) : (
-                eventsOfDay(cursor).map((e) => <EventCard key={e._id} e={e} />)
-              )}
-            </div>
-          )}
-
-          {/* Vue Semaine */}
-          {view === 'week' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
-              {weekDays(startOfWeek(cursor)).map((day, i) => (
-                <div key={i} className="border rounded p-8" style={{ minHeight: 160, background: '#fafafa' }}>
-                  <div className="fw-bold mb-8" style={{ fontSize: 13 }}>{DAY_LABELS[i]} {day.getDate()}</div>
-                  {eventsOfDay(day).map((e) => <EventCard key={e._id} e={e} />)}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Vue Mois */}
-          {view === 'month' && (
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, marginBottom: 4 }}>
-                {DAY_SHORT.map((d) => (
-                  <div key={d} className="fw-bold text-center" style={{ fontSize: 12 }}>{d}</div>
-                ))}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
-                {monthGrid(cursor).map((day, i) => {
-                  const inMonth = isSameMonth(day, cursor);
-                  const dayEvents = eventsOfDay(day);
-                  return (
-                    <div key={i} className="border rounded p-4" style={{ minHeight: 90, background: inMonth ? '#fff' : '#f0f0f0', opacity: inMonth ? 1 : 0.6 }}>
-                      <div className="text-end" style={{ fontSize: 12 }}>{day.getDate()}</div>
-                      {dayEvents.slice(0, 3).map((e) => (
-                        <div key={e._id} className="rounded px-4 mb-2 text-truncate" style={{ background: colorById.get(e.calendar?.[0]) ?? '#2a9cc8', color: '#fff', fontSize: 11, cursor: 'pointer' }} title={e.title} onClick={() => setEventDialog({ event: e })}>
-                          {e.allday ? '' : `${isoTime(e.startMoment)} `}{e.title}
-                        </div>
-                      ))}
-                      {dayEvents.length > 3 && <div className="text-muted" style={{ fontSize: 10 }}>+{dayEvents.length - 3}</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Vue Liste (parité Angular) : événements à venir des calendriers visibles, triés par date */}
-          {view === 'list' && (
-            <div>
-              {events.length === 0 && <p className="text-muted">{t('calendar.list.empty', { defaultValue: 'Aucun événement.' })}</p>}
-              {[...events]
-                .sort((a, b) => (a.startMoment || '').localeCompare(b.startMoment || ''))
-                .map((e) => <EventCard key={e._id} e={e} />)}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+      {portalPublishDialog && (
+        <PortalPublishDialog
+          calendar={portalPublishDialog}
+          onClose={() => setPortalPublishDialog(null)}
+        />
+      )}
+      {confirmProps && (
+        <ConfirmModal
+          title={confirmProps.title}
+          text={confirmProps.text}
+          isLoading={confirmProps.isLoading}
+          onConfirm={confirmProps.onConfirm}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+    </>
   );
 }
 

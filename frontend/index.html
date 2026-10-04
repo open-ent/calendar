@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{#i18n}}calendar.title{{/i18n}}</title>
     <link rel="icon" id="favicon" href="" />
+    <!-- Bootstrap openent partagé, chargé au runtime (comme le thème Angular) :
+         porte les couleurs de marque par déploiement (data-product / data-theme),
+         qui ne sont PAS dans le paquet npm figé à la version du dernier build. -->
+    <link rel="stylesheet" href="/assets/themes/openent-bootstrap/index.css" />
   </head>
-  <body>
+  <body class="app-react" data-ode-app>
     <div id="root"></div>
     <div id="portal"></div>
     <script type="module" src="/src/main.tsx"></script>

@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{#i18n}}calendar.title{{/i18n}}</title>
     <link rel="icon" id="favicon" href="" />
+    <!-- Bootstrap openent partagé, chargé au runtime : le module suit le thème de
+         l'établissement sans recompilation (cf. frontend/index.html). -->
+    <link rel="stylesheet" href="/assets/themes/openent-bootstrap/index.css" />
     <script type="module" crossorigin src="/calendar/public/index.js"></script>
     <link rel="stylesheet" crossorigin href="/calendar/public/index.css">
   </head>
-  <body>
+  <body class="app-react" data-ode-app>
     <div id="root"></div>
     <div id="portal"></div>
   </body>

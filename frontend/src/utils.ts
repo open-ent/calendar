@@ -81,3 +81,38 @@ export function isSameMonth(day: Date, ref: Date): boolean {
 export function calendarColor(color?: string): string {
   return color && color.trim() ? color : '#2a9cc8';
 }
+
+/** Les quatre vues de l'agenda. */
+export type AgendaView = 'day' | 'week' | 'month' | 'list';
+
+/** Jours de la semaine (lundi → dimanche), en entier et en abrégé. */
+export const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+export const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+/** Décale le curseur d'une période (jour, semaine ou mois selon la vue). */
+export function shiftCursor(cursor: Date, view: AgendaView, direction: number): Date {
+  const d = new Date(cursor);
+  if (view === 'day') d.setDate(d.getDate() + direction);
+  else if (view === 'month') d.setMonth(d.getMonth() + direction);
+  else d.setDate(d.getDate() + direction * 7);
+  return d;
+}
+
+/** Libellé de la période affichée, selon la vue. */
+export function periodLabel(cursor: Date, view: AgendaView): string {
+  if (view === 'day') {
+    return cursor.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+  if (view === 'month') {
+    return cursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  }
+  const days = weekDays(startOfWeek(cursor));
+  const from = days[0].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+  const to = days[6].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  return `${from} – ${to}`;
+}

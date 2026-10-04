@@ -1,0 +1,111 @@
+/* Mise en page de l'agenda — uniquement ce que les utilitaires du socle n'expriment pas.
+   Toute couleur vient des jetons `--openent-*` du bootstrap chargé au runtime : le module
+   suit ainsi le thème de l'établissement sans feuille de styles parallèle. */
+
+.agenda-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--openent-gray-300);
+  border-radius: var(--openent-border-radius);
+  overflow: hidden;
+}
+
+.agenda-grid > * {
+  border-right: 1px solid var(--openent-gray-300);
+  border-bottom: 1px solid var(--openent-gray-300);
+  min-width: 0;
+}
+
+.agenda-grid > *:nth-child(7n) {
+  border-right: 0;
+}
+
+.agenda-weekday {
+  background: var(--openent-gray-200);
+}
+
+.agenda-day {
+  background: var(--openent-white);
+  min-height: 12rem;
+}
+
+.agenda-day--week {
+  min-height: 24rem;
+}
+
+.agenda-day--outside {
+  background: var(--openent-gray-100);
+}
+
+.agenda-day--today {
+  box-shadow: inset 0 0.3rem 0 0 var(--openent-primary);
+}
+
+/* Pastille d'événement en vue Mois : une ligne, tronquée, colorée par l'agenda. */
+.agenda-chip {
+  display: block;
+  width: 100%;
+  text-align: start;
+  border: 0;
+  border-radius: var(--openent-border-radius);
+  color: var(--openent-white);
+  background: var(--agenda-color, var(--openent-primary));
+}
+
+.agenda-chip:hover,
+.agenda-chip:focus-visible {
+  filter: brightness(0.92);
+}
+
+/* Filet coloré rappelant l'agenda d'appartenance sur les cartes d'événement. */
+.agenda-event-card {
+  border-inline-start: 0.4rem solid var(--agenda-color, var(--openent-primary));
+}
+
+.agenda-swatch {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 0.3rem;
+  flex: 0 0 auto;
+  background: var(--agenda-color);
+}
+
+/* Nuancier de couleurs d'agenda (boutons radio visuels). */
+.agenda-color-option {
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  border: 0.2rem solid transparent;
+  background: var(--agenda-color);
+  cursor: pointer;
+}
+
+.agenda-color-option[aria-pressed='true'] {
+  border-color: var(--openent-gray-800);
+  box-shadow: 0 0 0 0.2rem var(--openent-white) inset;
+}
+
+/* Liste de suggestions du champ de recherche de destinataires (partage). */
+.agenda-suggestions {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 10;
+  max-height: 24rem;
+  overflow-y: auto;
+  background: var(--openent-white);
+  border: 1px solid var(--openent-gray-300);
+  border-radius: var(--openent-border-radius);
+}
+
+/* Séparateur de la barre latérale uniquement quand elle est à gauche (≥ lg). */
+@media (min-width: 992px) {
+  .agenda-sidebar {
+    border-inline-end: 1px solid var(--openent-gray-300);
+  }
+}
+
+/* Le libellé de période garde une largeur stable : la navigation ne saute pas d'un mois à l'autre. */
+.agenda-period {
+  min-width: 20rem;
+}

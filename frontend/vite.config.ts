@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react';
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 // Proxy de dev vers l'ENT local (traefik :8090)
@@ -19,6 +20,10 @@ export default defineConfig(({ mode }) => ({
       '@open-ent/react',
       '@open-ent/bootstrap',
     ],
+    alias: {
+      // Illustrations du socle (écrans vides), comme dans blog.
+      '@images': resolve(__dirname, 'node_modules/@open-ent/bootstrap/dist/images'),
+    },
   },
   build: {
     assetsDir: 'public',
@@ -36,6 +41,8 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: 4200,
+    // Autorise la lecture des images/polices du paquet bootstrap (hors racine du projet).
+    fs: { allow: ['../../'] },
     proxy: {
       '/calendar': proxyTarget,
       '^/(?=assets|theme|locale|i18n|skin)': proxyTarget,
