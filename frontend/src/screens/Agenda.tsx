@@ -21,6 +21,7 @@ import { AgendaView, calendarColor, periodLabel, shiftCursor } from '../utils';
 import { CalendarDialog } from './CalendarDialog';
 import { EventDetails } from './EventDetails';
 import { EventDialog } from './EventDialog';
+import { IcsImportDialog } from './IcsImportDialog';
 import { PortalPublishDialog } from './PortalPublishDialog';
 import { ShareDialog } from './ShareDialog';
 
@@ -143,6 +144,7 @@ export function Agenda() {
   const [calendarDialog, setCalendarDialog] = useState<CalendarDialogState>(null);
   const [shareDialog, setShareDialog] = useState<ShareDialogState>(null);
   const [portalPublishDialog, setPortalPublishDialog] = useState<Calendar | null>(null);
+  const [icsImportDialog, setIcsImportDialog] = useState<Calendar | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   // Ajout d'un agenda externe (flux ICS, URL sur liste blanche des plateformes).
@@ -189,6 +191,14 @@ export function Agenda() {
           ? t('calendar.share.title', { defaultValue: "Partager l'agenda" })
           : t('calendar.event.share.title', { defaultValue: "Partager l'événement" }),
     });
+
+  /**
+   * Télécharge le flux iCalendar d'un agenda. La route est authentifiée par cookie de session :
+   * une navigation suffit, le navigateur gère l'enregistrement du fichier.
+   */
+  const exportIcs = (calendar: Calendar) => {
+    window.location.assign(api.icalExportUrl(calendar._id));
+  };
 
   /** Ouvre le formulaire si l'usager peut modifier, la fiche en lecture seule sinon. */
   const openEvent = (event: CalendarEvent) => {
@@ -275,6 +285,8 @@ export function Agenda() {
             setConfirm({ kind: calendar.isExternal ? 'external' : 'calendar', calendar })
           }
           onPortalPublish={setPortalPublishDialog}
+          onImportIcs={setIcsImportDialog}
+          onExportIcs={exportIcs}
           rightsOf={rightsOfCalendar}
           canCreateCalendar={canCreateCalendar}
           myOwnerId={myUserId}
@@ -346,6 +358,9 @@ export function Agenda() {
           shareBatch={shareDialog.kind === 'calendar' ? api.shareCalendarBatch : api.shareEventBatch}
           onClose={() => setShareDialog(null)}
         />
+      )}
+      {icsImportDialog && (
+        <IcsImportDialog calendar={icsImportDialog} onClose={() => setIcsImportDialog(null)} />
       )}
       {portalPublishDialog && (
         <PortalPublishDialog

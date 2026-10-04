@@ -165,3 +165,22 @@ export function daySpan(startIso: string, endIso: string | undefined, day: Date)
   if (isLast) return 'end';
   return 'middle';
 }
+
+/**
+ * Rend lisible la cause du refus d'un événement à l'import ICS. Le serveur renvoie selon les cas
+ * une clé i18n (`calendar.ical.event.slot.problem`) ou le message brut d'une exception Java,
+ * préfixé de son nom de classe — on retire alors le préfixe plutôt que d'afficher
+ * « net.atos.entng.calendar.exception.UnhandledEventException: … » à l'usager.
+ *
+ * @param translate rend la traduction de la clé, ou une chaîne vide si la clé est inconnue.
+ */
+export function readableCause(
+  cause: string | undefined,
+  translate: (key: string) => string,
+): string {
+  if (!cause) return '';
+  const translated = translate(cause);
+  if (translated) return translated;
+  const match = cause.match(/^(?:[\w.]+(?:Exception|Error)):\s*(.+)$/s);
+  return match ? match[1] : cause;
+}

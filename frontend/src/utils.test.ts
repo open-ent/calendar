@@ -9,6 +9,7 @@ import {
   localInputToIsoUtc,
   monthGrid,
   occupiesDay,
+  readableCause,
   startOfWeek,
   weekDays,
 } from './utils';
@@ -108,5 +109,35 @@ describe('événements sur plusieurs jours', () => {
     expect(occupiesDay(start, d('2026-11-15T10:00:00'), day('2026-11-16'))).toBe(true); // fin avant début
     expect(occupiesDay(start, undefined, day('2026-11-16'))).toBe(true); // pas de fin
     expect(occupiesDay('pas-une-date', start, day('2026-11-16'))).toBe(false);
+  });
+});
+
+describe('readableCause (import ICS)', () => {
+  // Le serveur renvoie, selon le chemin de code, soit une clé i18n soit le message brut d'une
+  // exception Java — vérifié sur l'ENT local avec un .ics dont la fin précède le début.
+  const noTranslation = () => '';
+  const translateSlot = (key: string) =>
+    key === 'calendar.ical.event.slot.problem' ? "Problème d'horaires." : '';
+
+  it('traduit une clé i18n quand le serveur en renvoie une', () => {
+    expect(readableCause('calendar.ical.event.slot.problem', translateSlot)).toBe(
+      "Problème d'horaires.",
+    );
+  });
+
+  it("retire le nom de classe devant un message d'exception Java", () => {
+    const brut =
+      'net.atos.entng.calendar.exception.UnhandledEventException: La date de fin doit être supérieure ou égale à la date de début.';
+    expect(readableCause(brut, noTranslation)).toBe(
+      'La date de fin doit être supérieure ou égale à la date de début.',
+    );
+  });
+
+  it('garde un message déjà lisible tel quel', () => {
+    expect(readableCause('Fichier illisible', noTranslation)).toBe('Fichier illisible');
+  });
+
+  it('ne renvoie rien sans cause', () => {
+    expect(readableCause(undefined, noTranslation)).toBe('');
   });
 });

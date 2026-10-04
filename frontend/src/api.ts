@@ -179,6 +179,41 @@ export const deleteEvent = async (calendarId: string, eventId: string): Promise<
   if (!res.ok && res.status !== 204) throw new Error(String(res.status));
 };
 
+// ── Import / export iCalendar (.ics) ─────────────────────────────────────────
+
+/** Un événement du fichier que le serveur a refusé d'importer. */
+export interface InvalidIcsEvent {
+  title?: string;
+  startMoment?: string;
+  endMoment?: string;
+  /** Clé i18n expliquant le refus (ex. `calendar.ical.event.slot.problem`). */
+  errorCause?: string;
+}
+
+/** Compte rendu d'un import ICS, tel que le renvoie `PUT /calendar/:id/ical`. */
+export interface IcsImportReport {
+  createdEvents: number;
+  invalidEvents: InvalidIcsEvent[];
+}
+
+/** URL de téléchargement du flux ICS d'un agenda (route authentifiée, droit de lecture). */
+export const icalExportUrl = (calendarId: string): string => `/calendar/${calendarId}/ical`;
+
+export const importIcal = async (calendarId: string, ics: string): Promise<IcsImportReport> => {
+  const res = await fetch(`/calendar/${calendarId}/ical`, {
+    ...base,
+    method: 'PUT',
+    headers: mutHeaders(),
+    body: JSON.stringify({ ics }),
+  });
+  if (!res.ok) throw new Error(String(res.status));
+  const body = (await res.json()) as Partial<IcsImportReport> | null;
+  return {
+    createdEvents: body?.createdEvents ?? 0,
+    invalidEvents: body?.invalidEvents ?? [],
+  };
+};
+
 // ── Préférences d'affichage ───────────────────────────────────────────────────
 // Mêmes clé et format que l'IHM AngularJS (`model/Calendar.ts#Preference`) : les agendas
 // cochés suivent l'usager d'une interface à l'autre et d'une session à l'autre.
@@ -244,6 +279,8 @@ export const api = {
   addExternalCalendar,
   getPreference,
   savePreference,
+  icalExportUrl,
+  importIcal,
   getCalendars,
   createCalendar,
   updateCalendar,

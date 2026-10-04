@@ -9,11 +9,13 @@ import {
 } from '@open-ent/react';
 import {
   IconDelete,
+  IconDownload,
   IconEdit,
   IconGlobe,
   IconOptions,
   IconPlus,
   IconShare,
+  IconUpload,
 } from '@open-ent/react/icons';
 import { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -121,6 +123,10 @@ export interface CalendarSidebarProps {
   onShare: (calendar: Calendar) => void;
   onDelete: (calendar: Calendar) => void;
   onPortalPublish: (calendar: Calendar) => void;
+  /** Ouvre l'import d'un fichier iCalendar dans cet agenda. */
+  onImportIcs: (calendar: Calendar) => void;
+  /** Télécharge le flux iCalendar de cet agenda. */
+  onExportIcs: (calendar: Calendar) => void;
   /** Droits de l'usager sur un agenda : seules les actions permises sont proposées. */
   rightsOf: (calendar: Calendar) => CalendarRights;
   /** L'usager a-t-il le droit de workflow « créer un agenda » ? */
@@ -158,6 +164,8 @@ export function CalendarSidebar({
   onShare,
   onDelete,
   onPortalPublish,
+  onImportIcs,
+  onExportIcs,
   rightsOf,
   canCreateCalendar,
   myOwnerId,
@@ -185,6 +193,24 @@ export function CalendarSidebar({
         label: t('calendar.share', { defaultValue: 'Partager' }),
         icon: <IconShare />,
         onClick: () => onShare(c),
+      });
+    }
+    if (!c.isExternal) {
+      actions.push({
+        key: 'export',
+        label: t('calendar.export', { defaultValue: 'Exporter' }),
+        icon: <IconDownload />,
+        onClick: () => onExportIcs(c),
+      });
+    }
+    // L'import écrit dans l'agenda : le serveur l'exige en « manager », et le refuse
+    // sur un agenda externe (alimenté par son flux).
+    if (rights.manage && !c.isExternal) {
+      actions.push({
+        key: 'import',
+        label: t('calendar.import', { defaultValue: 'Importer' }),
+        icon: <IconUpload />,
+        onClick: () => onImportIcs(c),
       });
     }
     if (rights.manage) {
