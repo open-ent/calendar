@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { api, Calendar, CalendarEvent } from '../api';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { RecurrenceScope, RecurrenceScopeModal } from '../components/RecurrenceScopeModal';
 import { AgendaToolbar } from '../features/AgendaToolbar';
 import { DayView, ListView, MonthView, WeekView } from '../features/AgendaViews';
 import { CalendarSidebar } from '../features/CalendarSidebar';
@@ -28,7 +29,13 @@ import { ShareDialog } from './ShareDialog';
 /** Couleur attribuée d'office à un agenda externe ajouté par URL. */
 const EXTERNAL_CALENDAR_COLOR = '#e63b3b';
 
-type EventDialogState = { event?: CalendarEvent; defaultCalendarId?: string } | null;
+type EventDialogState = {
+  event?: CalendarEvent;
+  defaultCalendarId?: string;
+  scope?: RecurrenceScope;
+} | null;
+/** Action en attente du choix « cette occurrence / toute la récurrence ». */
+type ScopePromptState = { event: CalendarEvent; action: 'edit' | 'delete' } | null;
 type CalendarDialogState = { mode: 'new' } | { mode: 'edit'; calendar: Calendar } | null;
 type ShareDialogState = {
   resourceId: string;
@@ -146,6 +153,7 @@ export function Agenda() {
   const [portalPublishDialog, setPortalPublishDialog] = useState<Calendar | null>(null);
   const [icsImportDialog, setIcsImportDialog] = useState<Calendar | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [scopePrompt, setScopePrompt] = useState<ScopePromptState>(null);
 
   // Ajout d'un agenda externe (flux ICS, URL sur liste blanche des plateformes).
   const [addingExternal, setAddingExternal] = useState(false);
@@ -174,12 +182,25 @@ export function Agenda() {
     },
   });
   const deleteEventMut = useMutation({
-    mutationFn: ({ calId, evId }: { calId: string; evId: string }) => api.deleteEvent(calId, evId),
+    mutationFn: async ({ event, scope }: { event: CalendarEvent; scope: RecurrenceScope }) => {
+      const targets = scope === 'all' ? seriesOf(event) : [event];
+      for (const target of targets) {
+        await api.deleteEvent(target.calendar[0], target._id);
+      }
+    },
     onSuccess: () => {
       setConfirm(null);
+      setScopePrompt(null);
       qc.invalidateQueries({ queryKey: ['calendar', 'events'] });
     },
   });
+
+  /** Toutes les occurrences d'une série, retrouvées par `parentId` parmi les événements chargés. */
+  const seriesOf = (event: CalendarEvent): CalendarEvent[] =>
+    event.parentId ? events.filter((e) => e.parentId === event.parentId) : [event];
+
+  /** Un événement récurrent demande toujours à l'usager sur quoi porte l'action. */
+  const isSeries = (event: CalendarEvent) => !!event.isRecurrent && !!event.parentId;
 
   const openShare = (kind: 'calendar' | 'event', id: string, name: string) =>
     setShareDialog({
@@ -202,8 +223,17 @@ export function Agenda() {
 
   /** Ouvre le formulaire si l'usager peut modifier, la fiche en lecture seule sinon. */
   const openEvent = (event: CalendarEvent) => {
-    if (rightsOfEvent(event).edit) setEventDialog({ event });
-    else setEventDetails(event);
+    if (!rightsOfEvent(event).edit) {
+      setEventDetails(event);
+      return;
+    }
+    if (isSeries(event)) setScopePrompt({ event, action: 'edit' });
+    else setEventDialog({ event });
+  };
+
+  const askDelete = (event: CalendarEvent) => {
+    if (isSeries(event)) setScopePrompt({ event, action: 'delete' });
+    else setConfirm({ kind: 'event', event });
   };
 
   const viewProps = {
@@ -213,7 +243,7 @@ export function Agenda() {
     rightsOf: rightsOfEvent,
     onOpen: openEvent,
     onShare: (event: CalendarEvent) => openShare('event', event._id, event.title),
-    onDelete: (event: CalendarEvent) => setConfirm({ kind: 'event', event }),
+    onDelete: askDelete,
   };
 
   const confirmTexts = () => {
@@ -223,8 +253,7 @@ export function Agenda() {
         title: t('calendar.event.delete.title', { defaultValue: "Supprimer l'événement" }),
         text: t('calendar.event.confirm.delete', { defaultValue: 'Supprimer cet événement ?' }),
         isLoading: deleteEventMut.isPending,
-        onConfirm: () =>
-          deleteEventMut.mutate({ calId: confirm.event.calendar[0], evId: confirm.event._id }),
+        onConfirm: () => deleteEventMut.mutate({ event: confirm.event, scope: 'one' }),
       };
     }
     return {
@@ -325,6 +354,7 @@ export function Agenda() {
           calendars={writableCalendars}
           event={eventDialog.event}
           defaultCalendarId={eventDialog.defaultCalendarId}
+          scope={eventDialog.scope}
           onClose={() => setEventDialog(null)}
         />
       )}
@@ -366,6 +396,38 @@ export function Agenda() {
         <PortalPublishDialog
           calendar={portalPublishDialog}
           onClose={() => setPortalPublishDialog(null)}
+        />
+      )}
+      {scopePrompt && (
+        <RecurrenceScopeModal
+          title={
+            scopePrompt.action === 'edit'
+              ? t('calendar.edit.recurrent.event', { defaultValue: 'Modifier un évènement récurrent' })
+              : t('calendar.confirm.delete.recurrent.event', {
+                  defaultValue: "Confirmer la suppression d'événements récurrents",
+                })
+          }
+          question={
+            scopePrompt.action === 'edit'
+              ? t('calendar.event.recurrence.edition', { defaultValue: 'Vous souhaitez modifier' })
+              : t('calendar.event.recurrence.deletion', { defaultValue: 'Vous souhaitez supprimer' })
+          }
+          confirmLabel={
+            scopePrompt.action === 'edit'
+              ? t('calendar.utils.edit', { defaultValue: 'Modifier' })
+              : t('calendar.delete', { defaultValue: 'Supprimer' })
+          }
+          danger={scopePrompt.action === 'delete'}
+          isLoading={scopePrompt.action === 'delete' && deleteEventMut.isPending}
+          onConfirm={(scope) => {
+            if (scopePrompt.action === 'edit') {
+              setEventDialog({ event: scopePrompt.event, scope });
+              setScopePrompt(null);
+            } else {
+              deleteEventMut.mutate({ event: scopePrompt.event, scope });
+            }
+          }}
+          onCancel={() => setScopePrompt(null)}
         />
       )}
       {confirmProps && (

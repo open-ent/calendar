@@ -307,5 +307,8 @@
   "calendar.event.see": "Voir l'événement",
   "calendar.event.span.start": "à partir de [[time]]",
   "calendar.event.span.middle": "toute la journée (suite)",
-  "calendar.event.span.end": "jusqu'à [[time]]"
+  "calendar.event.span.end": "jusqu'à [[time]]",
+  "calendar.recurrence.empty": "Cette récurrence ne produit aucune occurrence.",
+  "calendar.recurrence.preview": "[[count]] occurrence(s) seront créées.",
+  "calendar.event.recurrence.deletion": "Vous souhaitez supprimer"
 }

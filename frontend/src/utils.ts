@@ -1,3 +1,5 @@
+import { Recurrence } from './recurrence';
+
 /** Fonctions pures du module Calendar (testables). */
 
 /** Renvoie le lundi (00:00) de la semaine contenant `d`. */
@@ -183,4 +185,62 @@ export function readableCause(
   if (translated) return translated;
   const match = cause.match(/^(?:[\w.]+(?:Exception|Error)):\s*(.+)$/s);
   return match ? match[1] : cause;
+}
+
+/**
+ * Phrase décrivant une récurrence (« Tous les 2 semaines, Lu, Je, Fin le 12/12/2026 »), pour
+ * rappeler à l'usager ce qu'il modifie. Reprend les mêmes clés i18n que l'IHM AngularJS.
+ */
+export function recurrenceSummary(
+  recurrence: Recurrence,
+  translate: (key: string, options?: { defaultValue: string }) => string,
+): string {
+  // « Tous les 3 jours » mais « Toutes les 3 semaines » : le socle fournit les deux genres.
+  // Au pas de 1, on reprend les libellés tout faits (« Tous les jours », « Toutes les semaines »).
+  const daily = recurrence.type === 'every_day';
+  const periodicity =
+    recurrence.every === 1
+      ? daily
+        ? translate('calendar.recurrence.every.day', { defaultValue: 'Tous les jours' })
+        : translate('calendar.recurrence.every.week', { defaultValue: 'Toutes les semaines' })
+      : [
+          daily
+            ? translate('calendar.recurrence.every', { defaultValue: 'Tous les' })
+            : translate('calendar.recurrence.every.female', { defaultValue: 'Toutes les' }),
+          recurrence.every,
+          daily
+            ? translate('calendar.recurrence.days', { defaultValue: 'jours' })
+            : translate('calendar.recurrence.weeks', { defaultValue: 'semaines' }),
+        ].join(' ');
+  const parts = [periodicity];
+
+  if (recurrence.type === 'every_week') {
+    const names: Record<number, [string, string]> = {
+      1: ['calendar.recurrence.daymap.mon', 'Lu'],
+      2: ['calendar.recurrence.daymap.tue', 'Ma'],
+      3: ['calendar.recurrence.daymap.wed', 'Me'],
+      4: ['calendar.recurrence.daymap.thu', 'Je'],
+      5: ['calendar.recurrence.daymap.fri', 'Ve'],
+      6: ['calendar.recurrence.daymap.sat', 'Sa'],
+      7: ['calendar.recurrence.daymap.sun', 'Di'],
+    };
+    const days = [1, 2, 3, 4, 5, 6, 7]
+      .filter((d) => recurrence.week_days?.[String(d)])
+      .map((d) => translate(names[d][0], { defaultValue: names[d][1] }));
+    if (days.length > 0) parts.push(days.join(', '));
+  }
+
+  if (recurrence.end_type === 'after' && recurrence.end_after) {
+    parts.push(
+      `${translate('calendar.recurrence.end.after', { defaultValue: 'Après' })} ${recurrence.end_after} ${translate('calendar.recurrence.occurrences', { defaultValue: 'occurrences' })}`,
+    );
+  } else if (recurrence.end_on) {
+    const date = new Date(recurrence.end_on);
+    if (!Number.isNaN(date.getTime())) {
+      parts.push(
+        `${translate('calendar.recurrence.until', { defaultValue: "jusqu'au" })} ${date.toLocaleDateString('fr-FR')}`,
+      );
+    }
+  }
+  return parts.join(' · ');
 }

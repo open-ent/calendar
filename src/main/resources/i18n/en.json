@@ -308,5 +308,8 @@
   "calendar.event.see": "View the event",
   "calendar.event.span.start": "from [[time]]",
   "calendar.event.span.middle": "all day (continued)",
-  "calendar.event.span.end": "until [[time]]"
+  "calendar.event.span.end": "until [[time]]",
+  "calendar.recurrence.empty": "This recurrence produces no occurrence.",
+  "calendar.recurrence.preview": "[[count]] occurrence(s) will be created.",
+  "calendar.event.recurrence.deletion": "You want to delete"
 }

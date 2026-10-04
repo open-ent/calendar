@@ -1,3 +1,5 @@
+import { Occurrence, Recurrence } from './recurrence';
+
 // Client REST du module Calendar (agenda) — cookies de session ENT, même origine.
 // Mêmes endpoints que la version AngularJS (backend Java inchangé).
 //
@@ -43,8 +45,12 @@ export interface CalendarEvent {
   calendar: string[];
   owner?: { userId: string; displayName: string };
   shared?: SharedEntry[];
-  /** Récurrence : identifiant de l'événement parent de la série. */
+  /** Récurrence : identifiant qui relie toutes les occurrences d'une même série. */
   parentId?: string;
+  /** Réglages de la récurrence, recopiés sur chaque occurrence. */
+  recurrence?: Recurrence;
+  /** Rang de l'occurrence dans sa série. */
+  index?: number;
 }
 
 /** Corps de création/màj d'un événement. */
@@ -57,6 +63,14 @@ export interface EventInput {
   calendar: string[];
   location?: string;
   description?: string;
+  /** Récurrence portée par chaque occurrence de la série. */
+  recurrence?: Recurrence | false;
+  /** Rattache l'occurrence à sa série ; c'est sur lui que `updateAll` la retrouve. */
+  parentId?: string;
+  /** Rang de l'occurrence dans la série. */
+  index?: number;
+  /** `false` pour ne pas déclencher de notification (occurrences intermédiaires). */
+  sendNotif?: boolean;
 }
 
 // ── Partage (modèle entcore batch, comme forum/rbs) ──────────────────────────
@@ -174,6 +188,58 @@ export const updateEvent = async (calendarId: string, eventId: string, data: Eve
     await fetch(`/calendar/${calendarId}/event/${eventId}`, { ...base, method: 'PUT', headers: mutHeaders(), body: JSON.stringify(data) }),
   );
 
+/**
+ * Applique une modification à TOUTE la série. Le serveur retrouve les occurrences par
+ * `{parentId, isRecurrent: true}` et n'y propage ni les dates ni l'index — seulement l'horaire
+ * si celui-ci a changé.
+ */
+export const updateAllEvents = async (
+  calendarId: string,
+  eventId: string,
+  data: EventInput,
+): Promise<void> => {
+  const res = await fetch(`/calendar/${calendarId}/event/${eventId}/updateAll`, {
+    ...base,
+    method: 'POST',
+    headers: mutHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(String(res.status));
+};
+
+/**
+ * Crée une série récurrente, dans la forme exacte que produit l'IHM AngularJS : un événement
+ * « ancre » sert uniquement à obtenir l'identifiant qui reliera la série, chaque occurrence est
+ * créée avec cet identifiant en `parentId`, puis l'ancre est supprimée. Aucune occurrence n'a
+ * donc d'`_id` égal au `parentId` — c'est ce que `updateAll` attend.
+ *
+ * L'ancre est créée avec `sendNotif: false` : elle est supprimée dans la foulée, la notifier
+ * enverrait un avis pour un événement qui n'existe plus.
+ */
+export const createRecurrentEvents = async (
+  calendarId: string,
+  data: EventInput,
+  series: Occurrence[],
+): Promise<void> => {
+  if (series.length === 0) throw new Error('empty-recurrence');
+
+  const anchor = await createEvent(calendarId, { ...data, sendNotif: false });
+  try {
+    for (let i = 0; i < series.length; i += 1) {
+      await createEvent(calendarId, {
+        ...data,
+        startMoment: series[i].startMoment,
+        endMoment: series[i].endMoment,
+        parentId: anchor._id,
+        index: i,
+      });
+    }
+  } finally {
+    // Même en cas d'échec en cours de route, l'ancre ne doit pas rester dans l'agenda.
+    await deleteEvent(calendarId, anchor._id).catch(() => undefined);
+  }
+};
+
 export const deleteEvent = async (calendarId: string, eventId: string): Promise<void> => {
   const res = await fetch(`/calendar/${calendarId}/event/${eventId}`, { ...base, method: 'DELETE', headers: xsrfHeader() });
   if (!res.ok && res.status !== 204) throw new Error(String(res.status));
@@ -289,7 +355,9 @@ export const api = {
   unpublishCalendarPortal,
   getEvents,
   createEvent,
+  createRecurrentEvents,
   updateEvent,
+  updateAllEvents,
   deleteEvent,
   getCalendarShare,
   shareCalendarBatch,

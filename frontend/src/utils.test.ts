@@ -10,6 +10,7 @@ import {
   monthGrid,
   occupiesDay,
   readableCause,
+  recurrenceSummary,
   startOfWeek,
   weekDays,
 } from './utils';
@@ -139,5 +140,66 @@ describe('readableCause (import ICS)', () => {
 
   it('ne renvoie rien sans cause', () => {
     expect(readableCause(undefined, noTranslation)).toBe('');
+  });
+});
+
+describe('recurrenceSummary', () => {
+  // Les traductions viennent du module ; ici on renvoie la clé pour vérifier la composition.
+  const fr: Record<string, string> = {
+    'calendar.recurrence.every.day': 'Tous les jours',
+    'calendar.recurrence.every.week': 'Toutes les semaines',
+    'calendar.recurrence.every': 'Tous les',
+    'calendar.recurrence.every.female': 'Toutes les',
+    'calendar.recurrence.days': 'jours',
+    'calendar.recurrence.weeks': 'semaines',
+    'calendar.recurrence.daymap.mon': 'Lu',
+    'calendar.recurrence.daymap.wed': 'Me',
+    'calendar.recurrence.end.after': 'Après',
+    'calendar.recurrence.occurrences': 'occurrences',
+    'calendar.recurrence.until': "jusqu'au",
+  };
+  const t = (key: string, o?: { defaultValue: string }) => fr[key] ?? o?.defaultValue ?? '';
+  const days = (...d: number[]) => {
+    const w: Record<string, boolean> = {};
+    for (let i = 1; i <= 7; i += 1) w[String(i)] = d.includes(i);
+    return w;
+  };
+
+  it('accorde le genre : « Toutes les 2 semaines », pas « Tous les »', () => {
+    expect(
+      recurrenceSummary(
+        { type: 'every_week', every: 2, week_days: days(1), end_type: 'after', end_after: 4 },
+        t,
+      ),
+    ).toBe('Toutes les 2 semaines · Lu · Après 4 occurrences');
+  });
+
+  it('utilise le libellé tout fait au pas de 1', () => {
+    expect(
+      recurrenceSummary(
+        { type: 'every_week', every: 1, week_days: days(1, 3), end_type: 'after', end_after: 6 },
+        t,
+      ),
+    ).toBe('Toutes les semaines · Lu, Me · Après 6 occurrences');
+    expect(
+      recurrenceSummary(
+        { type: 'every_day', every: 1, week_days: days(), end_type: 'after', end_after: 3 },
+        t,
+      ),
+    ).toBe('Tous les jours · Après 3 occurrences');
+  });
+
+  it('affiche la date de fin quand la série s’arrête à une date', () => {
+    const summary = recurrenceSummary(
+      {
+        type: 'every_day',
+        every: 1,
+        week_days: days(),
+        end_type: 'on',
+        end_on: new Date(2026, 11, 12).toISOString(),
+      },
+      t,
+    );
+    expect(summary).toBe("Tous les jours · jusqu'au 12/12/2026");
   });
 });
