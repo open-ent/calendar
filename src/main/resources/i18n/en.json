@@ -303,5 +303,10 @@
   "calendar.view.week": "Week",
   "calendar.views": "Views",
   "calendar.actions": "Actions",
-  "calendar.event.recurrent.occurrence.only": "This event is recurring: only this occurrence will be changed. Use the previous interface to act on the whole series."
+  "calendar.event.recurrent.occurrence.only": "This event is recurring: only this occurrence will be changed. Use the previous interface to act on the whole series.",
+  "calendar.close": "Close",
+  "calendar.event.see": "View the event",
+  "calendar.event.span.start": "from [[time]]",
+  "calendar.event.span.middle": "all day (continued)",
+  "calendar.event.span.end": "until [[time]]"
 }

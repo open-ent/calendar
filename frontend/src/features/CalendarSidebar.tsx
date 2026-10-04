@@ -19,6 +19,7 @@ import { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Calendar } from '../api';
+import { CalendarRights } from '../rights';
 import { calendarColor } from '../utils';
 
 /** Une action du menu d'un agenda. */
@@ -109,13 +110,17 @@ export interface CalendarSidebarProps {
   sharedCalendars: Calendar[];
   externalCalendars: Calendar[];
   isLoading: boolean;
-  hidden: Set<string>;
+  isVisible: (id: string) => boolean;
   onToggle: (id: string) => void;
   onCreate: () => void;
   onEdit: (calendar: Calendar) => void;
   onShare: (calendar: Calendar) => void;
   onDelete: (calendar: Calendar) => void;
   onPortalPublish: (calendar: Calendar) => void;
+  /** Droits de l'usager sur un agenda : seules les actions permises sont proposées. */
+  rightsOf: (calendar: Calendar) => CalendarRights;
+  /** L'usager a-t-il le droit de workflow « créer un agenda » ? */
+  canCreateCalendar: boolean;
   /** Formulaire d'ajout d'un agenda externe (flux ICS). */
   externalForm: {
     isOpen: boolean;
@@ -123,6 +128,8 @@ export interface CalendarSidebarProps {
     url: string;
     isPending: boolean;
     isError: boolean;
+    /** Droit d'ajouter un flux externe (même droit de workflow que créer un agenda). */
+    canAdd: boolean;
     onOpenChange: (open: boolean) => void;
     onTitleChange: (value: string) => void;
     onUrlChange: (value: string) => void;
@@ -136,13 +143,15 @@ export function CalendarSidebar({
   sharedCalendars,
   externalCalendars,
   isLoading,
-  hidden,
+  isVisible,
   onToggle,
   onCreate,
   onEdit,
   onShare,
   onDelete,
   onPortalPublish,
+  rightsOf,
+  canCreateCalendar,
   externalForm,
 }: CalendarSidebarProps) {
   const { t } = useTranslation(['calendar', 'common']);
@@ -152,32 +161,41 @@ export function CalendarSidebar({
     defaultValue: 'Publier sur le portail public',
   });
 
-  const publishAction = (c: Calendar): RowAction[] =>
-    c.type === 'structure'
+  /** Publier sur le portail : réservé aux agendas d'établissement qu'on peut gérer. */
+  const publishAction = (c: Calendar, rights: CalendarRights): RowAction[] =>
+    c.type === 'structure' && rights.manage
       ? [{ key: 'publish', label: publishLabel, icon: <IconGlobe />, onClick: () => onPortalPublish(c) }]
       : [];
 
-  const ownerActions = (c: Calendar): RowAction[] => [
-    ...publishAction(c),
-    {
-      key: 'share',
-      label: t('calendar.share', { defaultValue: 'Partager' }),
-      icon: <IconShare />,
-      onClick: () => onShare(c),
-    },
-    {
-      key: 'edit',
-      label: t('calendar.edit', { defaultValue: "Éditer un agenda" }),
-      icon: <IconEdit />,
-      onClick: () => onEdit(c),
-    },
-    {
-      key: 'delete',
-      label: t('calendar.delete', { defaultValue: 'Supprimer' }),
-      icon: <IconDelete />,
-      onClick: () => onDelete(c),
-    },
-  ];
+  const actionsFor = (c: Calendar): RowAction[] => {
+    const rights = rightsOf(c);
+    const actions: RowAction[] = [...publishAction(c, rights)];
+    if (rights.share) {
+      actions.push({
+        key: 'share',
+        label: t('calendar.share', { defaultValue: 'Partager' }),
+        icon: <IconShare />,
+        onClick: () => onShare(c),
+      });
+    }
+    if (rights.manage) {
+      actions.push({
+        key: 'edit',
+        label: t('calendar.edit', { defaultValue: 'Éditer un agenda' }),
+        icon: <IconEdit />,
+        onClick: () => onEdit(c),
+      });
+    }
+    if (rights.remove) {
+      actions.push({
+        key: 'delete',
+        label: t('calendar.delete', { defaultValue: 'Supprimer' }),
+        icon: <IconDelete />,
+        onClick: () => onDelete(c),
+      });
+    }
+    return actions;
+  };
 
   const submitExternal = (e: FormEvent) => {
     e.preventDefault();
@@ -189,16 +207,18 @@ export function CalendarSidebar({
       <SidebarSection
         title={t('calendar.mycalendars', { defaultValue: 'Mes agendas' })}
         action={
-          <Button
-            type="button"
-            color="tertiary"
-            variant="ghost"
-            size="sm"
-            leftIcon={<IconPlus />}
-            onClick={onCreate}
-          >
-            {t('calendar.new', { defaultValue: 'Créer un agenda' })}
-          </Button>
+          canCreateCalendar && (
+            <Button
+              type="button"
+              color="tertiary"
+              variant="ghost"
+              size="sm"
+              leftIcon={<IconPlus />}
+              onClick={onCreate}
+            >
+              {t('calendar.new', { defaultValue: 'Créer un agenda' })}
+            </Button>
+          )
         }
       >
         {isLoading ? (
@@ -212,9 +232,9 @@ export function CalendarSidebar({
               <CalendarRow
                 key={c._id}
                 calendar={c}
-                checked={!hidden.has(c._id)}
+                checked={isVisible(c._id)}
                 onToggle={() => onToggle(c._id)}
-                actions={ownerActions(c)}
+                actions={actionsFor(c)}
               />
             ))}
           </ul>
@@ -228,10 +248,10 @@ export function CalendarSidebar({
             <CalendarRow
               key={c._id}
               calendar={c}
-              checked={!hidden.has(c._id)}
+              checked={isVisible(c._id)}
               onToggle={() => onToggle(c._id)}
               subtitle={c.owner?.displayName}
-              actions={publishAction(c)}
+              actions={actionsFor(c)}
             />
           ))}
         </ul>
@@ -240,7 +260,7 @@ export function CalendarSidebar({
       <SidebarSection
         title={t('calendar.externalcalendars', { defaultValue: 'Agendas externes' })}
         action={
-          !externalForm.isOpen && (
+          externalForm.canAdd && !externalForm.isOpen && (
             <Button
               type="button"
               color="tertiary"
@@ -260,16 +280,9 @@ export function CalendarSidebar({
             <CalendarRow
               key={c._id}
               calendar={c}
-              checked={!hidden.has(c._id)}
+              checked={isVisible(c._id)}
               onToggle={() => onToggle(c._id)}
-              actions={[
-                {
-                  key: 'delete',
-                  label: t('calendar.delete', { defaultValue: 'Supprimer' }),
-                  icon: <IconDelete />,
-                  onClick: () => onDelete(c),
-                },
-              ]}
+              actions={actionsFor(c)}
             />
           ))}
         </ul>

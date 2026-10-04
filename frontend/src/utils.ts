@@ -116,3 +116,52 @@ export function periodLabel(cursor: Date, view: AgendaView): string {
   const to = days[6].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
   return `${from} – ${to}`;
 }
+
+/** Minuit (heure locale) du jour d'une date. */
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * L'événement occupe-t-il ce jour ? Un événement sur plusieurs jours occupe chaque jour
+ * entre son début et sa fin — c'est ce que faisait `multiDaysEventsUtils` côté AngularJS.
+ * La fin est exclusive à minuit pile : un événement qui se termine à 00:00 ne déborde pas
+ * sur le jour suivant.
+ */
+export function occupiesDay(startIso: string, endIso: string | undefined, day: Date): boolean {
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return false;
+  const end = endIso ? new Date(endIso) : start;
+  if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+    return isSameDay(startIso, day);
+  }
+  const dayStart = startOfDay(day).getTime();
+  const dayEnd = dayStart + 24 * 3600 * 1000;
+  return start.getTime() < dayEnd && end.getTime() > dayStart;
+}
+
+/** L'événement s'étale-t-il sur plus d'un jour civil ? */
+export function isMultiDay(startIso: string, endIso?: string): boolean {
+  if (!endIso) return false;
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+  if (end.getTime() <= start.getTime()) return false;
+  // Une fin à minuit pile appartient au jour precedent.
+  const lastInstant = new Date(end.getTime() - 1);
+  return !isSameDay(start.toISOString(), startOfDay(lastInstant));
+}
+
+/** Où en est un événement multi-jours ce jour-là ? */
+export type DaySpan = 'single' | 'start' | 'middle' | 'end';
+
+export function daySpan(startIso: string, endIso: string | undefined, day: Date): DaySpan {
+  if (!isMultiDay(startIso, endIso)) return 'single';
+  const start = new Date(startIso);
+  const lastInstant = new Date(new Date(endIso as string).getTime() - 1);
+  const isFirst = isSameDay(start.toISOString(), day);
+  const isLast = isSameDay(lastInstant.toISOString(), day);
+  if (isFirst) return 'start';
+  if (isLast) return 'end';
+  return 'middle';
+}

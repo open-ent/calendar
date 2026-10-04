@@ -302,5 +302,10 @@
   "calendar.view.week": "Semaine",
   "calendar.views": "Vues",
   "calendar.actions": "Actions",
-  "calendar.event.recurrent.occurrence.only": "Cet événement est récurrent : seule cette occurrence sera modifiée. Utilisez l'ancienne interface pour agir sur toute la récurrence."
+  "calendar.event.recurrent.occurrence.only": "Cet événement est récurrent : seule cette occurrence sera modifiée. Utilisez l'ancienne interface pour agir sur toute la récurrence.",
+  "calendar.close": "Fermer",
+  "calendar.event.see": "Voir l'événement",
+  "calendar.event.span.start": "à partir de [[time]]",
+  "calendar.event.span.middle": "toute la journée (suite)",
+  "calendar.event.span.end": "jusqu'à [[time]]"
 }

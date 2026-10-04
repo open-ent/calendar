@@ -9,7 +9,16 @@ import { api, Calendar } from '../api';
 const COLORS = ['#2a9cc8', '#46bfaf', '#ecbe30', '#e13a3a', '#b930a2', '#763294', '#1a22a2', '#b0b0b0'];
 
 /** Création / édition d'un agenda. `calendar` défini = édition. */
-export function CalendarDialog({ calendar, onClose }: { calendar?: Calendar; onClose: () => void }) {
+export function CalendarDialog({
+  calendar,
+  onCreated,
+  onClose,
+}: {
+  calendar?: Calendar;
+  /** Rend visible l'agenda qu'on vient de créer (préférence d'affichage). */
+  onCreated?: (calendarId: string) => void;
+  onClose: () => void;
+}) {
   const { t } = useTranslation(['calendar', 'common']);
   const qc = useQueryClient();
   const editing = !!calendar;
@@ -22,7 +31,8 @@ export function CalendarDialog({ calendar, onClose }: { calendar?: Calendar; onC
       editing
         ? api.updateCalendar(calendar._id, { title: title.trim(), color })
         : api.createCalendar({ title: title.trim(), color }),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      if (!editing && created?._id) onCreated?.(created._id);
       qc.invalidateQueries({ queryKey: ['calendar', 'calendars'] });
       onClose();
     },

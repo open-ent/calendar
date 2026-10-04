@@ -1,14 +1,18 @@
 import { IconButton, Tooltip } from '@open-ent/react';
-import { IconDelete, IconEdit, IconShare } from '@open-ent/react/icons';
+import { IconDelete, IconEdit, IconSee, IconShare } from '@open-ent/react/icons';
 import { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CalendarEvent } from '../api';
-import { isoTime } from '../utils';
+import { EventRights } from '../rights';
+import { DaySpan, isoTime } from '../utils';
 
 export interface EventCardProps {
   event: CalendarEvent;
   color: string;
+  rights: EventRights;
+  /** Où en est un événement sur plusieurs jours ce jour-là. */
+  span?: DaySpan;
   /** Affiche la date complète en plus de l'heure (vue Liste, où les jours sont mélangés). */
   withDate?: boolean;
   /**
@@ -16,32 +20,57 @@ export interface EventCardProps {
    * l'événement, les actions restant accessibles depuis les vues Jour et Liste.
    */
   compact?: boolean;
-  onEdit: () => void;
+  /** Ouvre l'événement : formulaire si modifiable, fiche en lecture seule sinon. */
+  onOpen: () => void;
   onShare: () => void;
   onDelete: () => void;
 }
 
-/** Carte d'un événement : quand, titre, lieu, et les actions du socle. */
+/** Carte d'un événement : quand, titre, lieu, et les actions permises à l'usager. */
 export function EventCard({
   event,
   color,
+  rights,
+  span = 'single',
   withDate,
   compact,
-  onEdit,
+  onOpen,
   onShare,
   onDelete,
 }: EventCardProps) {
   const { t } = useTranslation(['calendar', 'common']);
 
-  const when = event.allday
-    ? t('calendar.event.allday.short', { defaultValue: 'Journée' })
-    : `${isoTime(event.startMoment)} – ${isoTime(event.endMoment)}`;
+  const colorVar = { '--agenda-color': color } as CSSProperties;
+  const openLabel = rights.edit
+    ? t('calendar.event.edit', { defaultValue: "Modifier l'événement" })
+    : t('calendar.event.see', { defaultValue: "Voir l'événement" });
+
+  // Un événement sur plusieurs jours n'affiche que l'heure pertinente au jour affiché.
+  const when = (() => {
+    if (event.allday) return t('calendar.event.allday.short', { defaultValue: 'Journée' });
+    switch (span) {
+      case 'start':
+        return t('calendar.event.span.start', {
+          defaultValue: 'à partir de [[time]]',
+          time: isoTime(event.startMoment),
+        });
+      case 'middle':
+        return t('calendar.event.span.middle', { defaultValue: 'toute la journée (suite)' });
+      case 'end':
+        return t('calendar.event.span.end', {
+          defaultValue: "jusqu'à [[time]]",
+          time: isoTime(event.endMoment),
+        });
+      default:
+        return `${isoTime(event.startMoment)} – ${isoTime(event.endMoment)}`;
+    }
+  })();
+
   const date = new Date(event.startMoment).toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
   });
-  const colorVar = { '--agenda-color': color } as CSSProperties;
 
   if (compact) {
     return (
@@ -50,7 +79,7 @@ export function EventCard({
         className="agenda-event-card agenda-event-card--compact card bg-white text-start w-100 p-8 mb-8"
         style={colorVar}
         title={`${when} — ${event.title}`}
-        onClick={onEdit}
+        onClick={onOpen}
       >
         <span className="d-block small text-gray-700">{when}</span>
         <span className="d-block fw-bold">{event.title}</span>
@@ -69,39 +98,43 @@ export function EventCard({
           )}
         </div>
         <div className="d-flex gap-2 flex-shrink-0">
-          <Tooltip message={t('calendar.share', { defaultValue: 'Partager' })} placement="top">
+          {rights.share && (
+            <Tooltip message={t('calendar.share', { defaultValue: 'Partager' })} placement="top">
+              <IconButton
+                type="button"
+                color="tertiary"
+                variant="ghost"
+                size="sm"
+                icon={<IconShare />}
+                aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} : ${event.title}`}
+                onClick={onShare}
+              />
+            </Tooltip>
+          )}
+          <Tooltip message={openLabel} placement="top">
             <IconButton
               type="button"
               color="tertiary"
               variant="ghost"
               size="sm"
-              icon={<IconShare />}
-              aria-label={`${t('calendar.share', { defaultValue: 'Partager' })} : ${event.title}`}
-              onClick={onShare}
+              icon={rights.edit ? <IconEdit /> : <IconSee />}
+              aria-label={`${openLabel} : ${event.title}`}
+              onClick={onOpen}
             />
           </Tooltip>
-          <Tooltip message={t('calendar.event.edit', { defaultValue: "Modifier l'événement" })} placement="top">
-            <IconButton
-              type="button"
-              color="tertiary"
-              variant="ghost"
-              size="sm"
-              icon={<IconEdit />}
-              aria-label={`${t('calendar.event.edit', { defaultValue: "Modifier l'événement" })} : ${event.title}`}
-              onClick={onEdit}
-            />
-          </Tooltip>
-          <Tooltip message={t('calendar.delete', { defaultValue: 'Supprimer' })} placement="top">
-            <IconButton
-              type="button"
-              color="danger"
-              variant="ghost"
-              size="sm"
-              icon={<IconDelete />}
-              aria-label={`${t('calendar.delete', { defaultValue: 'Supprimer' })} : ${event.title}`}
-              onClick={onDelete}
-            />
-          </Tooltip>
+          {rights.remove && (
+            <Tooltip message={t('calendar.delete', { defaultValue: 'Supprimer' })} placement="top">
+              <IconButton
+                type="button"
+                color="danger"
+                variant="ghost"
+                size="sm"
+                icon={<IconDelete />}
+                aria-label={`${t('calendar.delete', { defaultValue: 'Supprimer' })} : ${event.title}`}
+                onClick={onDelete}
+              />
+            </Tooltip>
+          )}
         </div>
       </div>
     </div>

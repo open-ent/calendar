@@ -1,4 +1,4 @@
-import { AppHeader, Breadcrumb, Button, useEdificeClient } from '@open-ent/react';
+import { AppHeader, Breadcrumb, Button, useEdificeClient, useHasWorkflow } from '@open-ent/react';
 import { IconPlus } from '@open-ent/react/icons';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -9,8 +9,11 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { AgendaToolbar } from '../features/AgendaToolbar';
 import { DayView, ListView, MonthView, WeekView } from '../features/AgendaViews';
 import { CalendarSidebar } from '../features/CalendarSidebar';
+import { useCalendarVisibility } from '../hooks/useCalendarVisibility';
+import { calendarRights, CalendarRights, eventRights, WORKFLOW } from '../rights';
 import { AgendaView, calendarColor, periodLabel, shiftCursor } from '../utils';
 import { CalendarDialog } from './CalendarDialog';
+import { EventDetails } from './EventDetails';
 import { EventDialog } from './EventDialog';
 import { PortalPublishDialog } from './PortalPublishDialog';
 import { ShareDialog } from './ShareDialog';
@@ -37,15 +40,19 @@ export function Agenda() {
   const { t } = useTranslation(['calendar', 'common']);
   const qc = useQueryClient();
   const { currentApp, user } = useEdificeClient();
-  const myUserId = (user as { userId?: string } | undefined)?.userId ?? '';
+  const me = user as { userId?: string; groupsIds?: string[] } | undefined;
+  const myUserId = me?.userId ?? '';
+  const myGroupIds = useMemo(() => me?.groupsIds ?? [], [me]);
+
+  const canCreateCalendar = useHasWorkflow(WORKFLOW.createCalendar) === true;
 
   const calendarsQuery = useQuery({ queryKey: ['calendar', 'calendars'], queryFn: api.getCalendars });
   const calendars = useMemo(() => calendarsQuery.data ?? [], [calendarsQuery.data]);
 
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const { isVisible, toggle, reveal } = useCalendarVisibility(calendars);
   const visibleCalendars = useMemo(
-    () => calendars.filter((c) => !hidden.has(c._id)),
-    [calendars, hidden],
+    () => calendars.filter((c) => isVisible(c._id)),
+    [calendars, isVisible],
   );
 
   const eventQueries = useQueries({
@@ -59,6 +66,24 @@ export function Agenda() {
     [eventQueries],
   );
 
+  const calendarsById = useMemo(() => {
+    const m = new Map<string, Calendar>();
+    calendars.forEach((c) => m.set(c._id, c));
+    return m;
+  }, [calendars]);
+
+  // Droits de l'usager sur chaque agenda, calculés une fois (tableau `shared` entcore).
+  const rightsById = useMemo(() => {
+    const m = new Map<string, CalendarRights>();
+    calendars.forEach((c) => m.set(c._id, calendarRights(c, myUserId, myGroupIds)));
+    return m;
+  }, [calendars, myUserId, myGroupIds]);
+
+  const rightsOfCalendar = (c: Calendar) =>
+    rightsById.get(c._id) ?? calendarRights(c, myUserId, myGroupIds);
+  const rightsOfEvent = (e: CalendarEvent) =>
+    eventRights(e, calendarsById, rightsById, myUserId, myGroupIds);
+
   const colorById = useMemo(() => {
     const m = new Map<string, string>();
     calendars.forEach((c) => m.set(c._id, calendarColor(c.color)));
@@ -66,15 +91,19 @@ export function Agenda() {
   }, [calendars]);
   const colorOf = (e: CalendarEvent) => colorById.get(e.calendar?.[0]) ?? calendarColor();
 
-  // Les agendas externes (flux ICS) sont en lecture seule : exclus de toute écriture.
-  const writableCalendars = useMemo(() => calendars.filter((c) => !c.isExternal), [calendars]);
+  /** Agendas dans lesquels l'usager peut écrire — seuls ceux-là acceptent un événement. */
+  const writableCalendars = useMemo(
+    () => calendars.filter((c) => !c.isExternal && rightsById.get(c._id)?.contrib),
+    [calendars, rightsById],
+  );
+  const notExternal = useMemo(() => calendars.filter((c) => !c.isExternal), [calendars]);
   const myCalendars = useMemo(
-    () => writableCalendars.filter((c) => !myUserId || c.owner?.userId === myUserId),
-    [writableCalendars, myUserId],
+    () => notExternal.filter((c) => !myUserId || c.owner?.userId === myUserId),
+    [notExternal, myUserId],
   );
   const sharedCalendars = useMemo(
-    () => writableCalendars.filter((c) => myUserId && c.owner?.userId !== myUserId),
-    [writableCalendars, myUserId],
+    () => notExternal.filter((c) => myUserId && c.owner?.userId !== myUserId),
+    [notExternal, myUserId],
   );
   const externalCalendars = useMemo(() => calendars.filter((c) => c.isExternal), [calendars]);
 
@@ -82,6 +111,7 @@ export function Agenda() {
   const [cursor, setCursor] = useState(() => new Date());
 
   const [eventDialog, setEventDialog] = useState<EventDialogState>(null);
+  const [eventDetails, setEventDetails] = useState<CalendarEvent | null>(null);
   const [calendarDialog, setCalendarDialog] = useState<CalendarDialogState>(null);
   const [shareDialog, setShareDialog] = useState<ShareDialogState>(null);
   const [portalPublishDialog, setPortalPublishDialog] = useState<Calendar | null>(null);
@@ -121,14 +151,6 @@ export function Agenda() {
     },
   });
 
-  const toggleHidden = (id: string) =>
-    setHidden((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
   const openShare = (kind: 'calendar' | 'event', id: string, name: string) =>
     setShareDialog({
       resourceId: id,
@@ -140,13 +162,21 @@ export function Agenda() {
           : t('calendar.event.share.title', { defaultValue: "Partager l'événement" }),
     });
 
-  const viewHandlers = {
+  /** Ouvre le formulaire si l'usager peut modifier, la fiche en lecture seule sinon. */
+  const openEvent = (event: CalendarEvent) => {
+    if (rightsOfEvent(event).edit) setEventDialog({ event });
+    else setEventDetails(event);
+  };
+
+  const viewProps = {
+    cursor,
+    events,
     colorOf,
-    onEdit: (event: CalendarEvent) => setEventDialog({ event }),
+    rightsOf: rightsOfEvent,
+    onOpen: openEvent,
     onShare: (event: CalendarEvent) => openShare('event', event._id, event.title),
     onDelete: (event: CalendarEvent) => setConfirm({ kind: 'event', event }),
   };
-  const viewProps = { cursor, events, ...viewHandlers };
 
   const confirmTexts = () => {
     if (!confirm) return null;
@@ -188,7 +218,8 @@ export function Agenda() {
             disabled={writableCalendars.length === 0}
             onClick={() =>
               setEventDialog({
-                defaultCalendarId: visibleCalendars.find((c) => !c.isExternal)?._id,
+                defaultCalendarId:
+                  writableCalendars.find((c) => isVisible(c._id))?._id ?? writableCalendars[0]?._id,
               })
             }
           >
@@ -205,8 +236,8 @@ export function Agenda() {
           sharedCalendars={sharedCalendars}
           externalCalendars={externalCalendars}
           isLoading={calendarsQuery.isLoading}
-          hidden={hidden}
-          onToggle={toggleHidden}
+          isVisible={isVisible}
+          onToggle={toggle}
           onCreate={() => setCalendarDialog({ mode: 'new' })}
           onEdit={(calendar) => setCalendarDialog({ mode: 'edit', calendar })}
           onShare={(calendar) => openShare('calendar', calendar._id, calendar.title)}
@@ -214,12 +245,15 @@ export function Agenda() {
             setConfirm({ kind: calendar.isExternal ? 'external' : 'calendar', calendar })
           }
           onPortalPublish={setPortalPublishDialog}
+          rightsOf={rightsOfCalendar}
+          canCreateCalendar={canCreateCalendar}
           externalForm={{
             isOpen: addingExternal,
             title: externalTitle,
             url: externalUrl,
             isPending: externalMut.isPending,
             isError: externalMut.isError,
+            canAdd: canCreateCalendar,
             onOpenChange: setAddingExternal,
             onTitleChange: setExternalTitle,
             onUrlChange: setExternalUrl,
@@ -251,9 +285,17 @@ export function Agenda() {
           onClose={() => setEventDialog(null)}
         />
       )}
+      {eventDetails && (
+        <EventDetails
+          event={eventDetails}
+          calendars={calendars}
+          onClose={() => setEventDetails(null)}
+        />
+      )}
       {calendarDialog && (
         <CalendarDialog
           calendar={calendarDialog.mode === 'edit' ? calendarDialog.calendar : undefined}
+          onCreated={reveal}
           onClose={() => setCalendarDialog(null)}
         />
       )}

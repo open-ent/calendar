@@ -5,12 +5,25 @@ import { useTranslation } from 'react-i18next';
 import illuAgenda from '@images/emptyscreen/illu-homeworks.svg';
 
 import { CalendarEvent } from '../api';
-import { DAY_LABELS, DAY_SHORT, isSameDay, isSameMonth, isoTime, monthGrid, startOfWeek, weekDays } from '../utils';
+import { EventRights } from '../rights';
+import {
+  DAY_LABELS,
+  DAY_SHORT,
+  daySpan,
+  isSameDay,
+  isSameMonth,
+  isoTime,
+  monthGrid,
+  occupiesDay,
+  startOfWeek,
+  weekDays,
+} from '../utils';
 import { EventCard } from './EventCard';
 
 export interface ViewHandlers {
   colorOf: (event: CalendarEvent) => string;
-  onEdit: (event: CalendarEvent) => void;
+  rightsOf: (event: CalendarEvent) => EventRights;
+  onOpen: (event: CalendarEvent) => void;
   onShare: (event: CalendarEvent) => void;
   onDelete: (event: CalendarEvent) => void;
 }
@@ -23,8 +36,9 @@ interface ViewProps extends ViewHandlers {
 const byStart = (a: CalendarEvent, b: CalendarEvent) =>
   (a.startMoment || '').localeCompare(b.startMoment || '');
 
+/** Les événements qui occupent ce jour — un événement sur plusieurs jours apparaît sur chacun. */
 const eventsOfDay = (events: CalendarEvent[], day: Date) =>
-  events.filter((e) => isSameDay(e.startMoment, day)).sort(byStart);
+  events.filter((e) => occupiesDay(e.startMoment, e.endMoment, day)).sort(byStart);
 
 /** Écran vide commun aux vues — illustration du socle. */
 function NoEvents({ text }: { text: string }) {
@@ -36,7 +50,7 @@ function NoEvents({ text }: { text: string }) {
 }
 
 /** Vue Jour : les événements du jour pointé, en cartes détaillées. */
-export function DayView({ cursor, events, colorOf, onEdit, onShare, onDelete }: ViewProps) {
+export function DayView({ cursor, events, colorOf, rightsOf, onOpen, onShare, onDelete }: ViewProps) {
   const { t } = useTranslation(['calendar', 'common']);
   const dayEvents = eventsOfDay(events, cursor);
 
@@ -51,7 +65,9 @@ export function DayView({ cursor, events, colorOf, onEdit, onShare, onDelete }: 
           key={e._id}
           event={e}
           color={colorOf(e)}
-          onEdit={() => onEdit(e)}
+          rights={rightsOf(e)}
+          span={daySpan(e.startMoment, e.endMoment, cursor)}
+          onOpen={() => onOpen(e)}
           onShare={() => onShare(e)}
           onDelete={() => onDelete(e)}
         />
@@ -61,8 +77,8 @@ export function DayView({ cursor, events, colorOf, onEdit, onShare, onDelete }: 
 }
 
 /** Vue Semaine : sept colonnes lundi → dimanche. */
-export function WeekView({ cursor, events, colorOf, onEdit, onShare, onDelete }: ViewProps) {
-  const today = new Date();
+export function WeekView({ cursor, events, colorOf, rightsOf, onOpen, onShare, onDelete }: ViewProps) {
+  const today = new Date().toISOString();
 
   return (
     <div className="agenda-grid">
@@ -71,7 +87,7 @@ export function WeekView({ cursor, events, colorOf, onEdit, onShare, onDelete }:
         return (
           <div
             key={day.toISOString()}
-            className={`agenda-day agenda-day--week p-8 ${isSameDay(today.toISOString(), day) ? 'agenda-day--today' : ''}`}
+            className={`agenda-day agenda-day--week p-8 ${isSameDay(today, day) ? 'agenda-day--today' : ''}`}
           >
             <div className="small fw-bold mb-8">
               {DAY_LABELS[i]} {day.getDate()}
@@ -81,8 +97,10 @@ export function WeekView({ cursor, events, colorOf, onEdit, onShare, onDelete }:
                 key={e._id}
                 event={e}
                 color={colorOf(e)}
+                rights={rightsOf(e)}
+                span={daySpan(e.startMoment, e.endMoment, day)}
                 compact
-                onEdit={() => onEdit(e)}
+                onOpen={() => onOpen(e)}
                 onShare={() => onShare(e)}
                 onDelete={() => onDelete(e)}
               />
@@ -95,9 +113,9 @@ export function WeekView({ cursor, events, colorOf, onEdit, onShare, onDelete }:
 }
 
 /** Vue Mois : grille 6 × 7, les événements en pastilles cliquables. */
-export function MonthView({ cursor, events, colorOf, onEdit }: ViewProps) {
+export function MonthView({ cursor, events, colorOf, onOpen }: ViewProps) {
   const { t } = useTranslation(['calendar', 'common']);
-  const today = new Date();
+  const today = new Date().toISOString();
   const maxChips = 3;
 
   return (
@@ -116,25 +134,28 @@ export function MonthView({ cursor, events, colorOf, onEdit }: ViewProps) {
             className={[
               'agenda-day p-4',
               inMonth ? '' : 'agenda-day--outside',
-              isSameDay(today.toISOString(), day) ? 'agenda-day--today' : '',
+              isSameDay(today, day) ? 'agenda-day--today' : '',
             ]
               .filter(Boolean)
               .join(' ')}
           >
             <div className={`small text-end ${inMonth ? '' : 'text-gray-600'}`}>{day.getDate()}</div>
-            {dayEvents.slice(0, maxChips).map((e) => (
-              <button
-                key={e._id}
-                type="button"
-                className="agenda-chip small text-truncate px-4 mb-2"
-                style={{ '--agenda-color': colorOf(e) } as CSSProperties}
-                title={e.title}
-                onClick={() => onEdit(e)}
-              >
-                {e.allday ? '' : `${isoTime(e.startMoment)} `}
-                {e.title}
-              </button>
-            ))}
+            {dayEvents.slice(0, maxChips).map((e) => {
+              const span = daySpan(e.startMoment, e.endMoment, day);
+              return (
+                <button
+                  key={e._id}
+                  type="button"
+                  className="agenda-chip small text-truncate px-4 mb-2"
+                  style={{ '--agenda-color': colorOf(e) } as CSSProperties}
+                  title={e.title}
+                  onClick={() => onOpen(e)}
+                >
+                  {e.allday || span === 'middle' || span === 'end' ? '' : `${isoTime(e.startMoment)} `}
+                  {e.title}
+                </button>
+              );
+            })}
             {dayEvents.length > maxChips && (
               <div className="small text-gray-700">
                 {t('calendar.month.more', {
@@ -151,7 +172,7 @@ export function MonthView({ cursor, events, colorOf, onEdit }: ViewProps) {
 }
 
 /** Vue Liste : tous les événements visibles, par ordre chronologique. */
-export function ListView({ events, colorOf, onEdit, onShare, onDelete }: ViewProps) {
+export function ListView({ events, colorOf, rightsOf, onOpen, onShare, onDelete }: ViewProps) {
   const { t } = useTranslation(['calendar', 'common']);
 
   if (events.length === 0) {
@@ -165,8 +186,9 @@ export function ListView({ events, colorOf, onEdit, onShare, onDelete }: ViewPro
           key={e._id}
           event={e}
           color={colorOf(e)}
+          rights={rightsOf(e)}
           withDate
-          onEdit={() => onEdit(e)}
+          onOpen={() => onOpen(e)}
           onShare={() => onShare(e)}
           onDelete={() => onDelete(e)}
         />

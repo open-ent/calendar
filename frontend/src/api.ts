@@ -4,13 +4,23 @@
 // ⚠️ SPÉCIFIQUE CALENDAR : le backend EXIGE le header `X-XSRF-TOKEN` (= cookie XSRF-TOKEN)
 // sur toute mutation (POST/PUT/DELETE), sinon 401. (rbs/forum ne l'exigeaient pas.)
 
+/**
+ * Une entrée du tableau `shared` entcore : le destinataire (`userId` OU `groupId`) et,
+ * à plat, chaque action accordée (`"net-atos-…|createEvent": true`).
+ */
+export interface SharedEntry {
+  userId?: string;
+  groupId?: string;
+  [action: string]: string | boolean | undefined;
+}
+
 export interface Calendar {
   _id: string;
   title: string;
   color?: string;
   owner?: { userId: string; displayName: string };
   isDefault?: boolean;
-  shared?: unknown[];
+  shared?: SharedEntry[];
   /** Agenda externe : alimenté par un flux ICS (icsLink), synchronisé côté serveur. */
   isExternal?: boolean;
   icsLink?: string;
@@ -32,6 +42,9 @@ export interface CalendarEvent {
   description?: string;
   calendar: string[];
   owner?: { userId: string; displayName: string };
+  shared?: SharedEntry[];
+  /** Récurrence : identifiant de l'événement parent de la série. */
+  parentId?: string;
 }
 
 /** Corps de création/màj d'un événement. */
@@ -146,6 +159,39 @@ export const deleteEvent = async (calendarId: string, eventId: string): Promise<
   if (!res.ok && res.status !== 204) throw new Error(String(res.status));
 };
 
+// ── Préférences d'affichage ───────────────────────────────────────────────────
+// Mêmes clé et format que l'IHM AngularJS (`model/Calendar.ts#Preference`) : les agendas
+// cochés suivent l'usager d'une interface à l'autre et d'une session à l'autre.
+
+export interface CalendarPreference {
+  selectedCalendars: string[];
+}
+
+export const getPreference = async (): Promise<CalendarPreference | null> => {
+  const res = await fetch('/userbook/preference/calendar', base);
+  if (!res.ok) return null;
+  const body = (await res.json()) as { preference?: string } | null;
+  if (!body?.preference) return null;
+  try {
+    const parsed = JSON.parse(body.preference) as Partial<CalendarPreference>;
+    return Array.isArray(parsed?.selectedCalendars)
+      ? { selectedCalendars: parsed.selectedCalendars }
+      : null;
+  } catch {
+    // Préférence illisible (ancien format, écriture partielle) : on repart d'une page blanche.
+    return null;
+  }
+};
+
+export const savePreference = async (preference: CalendarPreference): Promise<void> => {
+  await fetch('/userbook/preference/calendar', {
+    ...base,
+    method: 'PUT',
+    headers: mutHeaders(),
+    body: JSON.stringify(preference),
+  });
+};
+
 // ── Partage d'un calendrier ───────────────────────────────────────────────────
 export const getCalendarShare = async (calendarId: string): Promise<ShareJson> =>
   json<ShareJson>(await fetch(`/calendar/share/json/${calendarId}`, base));
@@ -176,6 +222,8 @@ export const shareEventBatch = async (eventId: string, batch: ShareBatch): Promi
 
 export const api = {
   addExternalCalendar,
+  getPreference,
+  savePreference,
   getCalendars,
   createCalendar,
   updateCalendar,
