@@ -21,5 +21,14 @@
   "timeline.calendar.event.reminder.see": "Check the ",
   "timeline.calendar.event.reminder.more.info": "for more information",
   "calendar.reminder.push.notif.body": "The event {0} starts in {1}.",
-  "push.notif.event.reminder": "Reminder"
+  "push.notif.event.reminder": "Reminder",
+  "calendar.booking-proposal": "Booking proposal to review",
+  "calendar.booking-proposal-accepted": "Booking proposal accepted",
+  "calendar.booking-proposal-refused": "Booking proposal refused",
+  "timeline.calendar.booking.proposal": "is proposing a resource booking on the event",
+  "timeline.calendar.booking.proposal.accepted": "accepted your booking proposal on the event",
+  "timeline.calendar.booking.proposal.refused": "refused your booking proposal on the event",
+  "push.notif.booking.proposal": "Calendar: booking to review",
+  "push.notif.booking.proposal.accepted": "Calendar: booking accepted",
+  "push.notif.booking.proposal.refused": "Calendar: booking refused"
 }

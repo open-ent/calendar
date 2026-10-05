@@ -279,6 +279,30 @@ public class CalendarServiceImpl implements CalendarService {
     }
 
     @Override
+    public Future<JsonObject> findStructureCalendar(String structureId) {
+        Promise<JsonObject> promise = Promise.promise();
+        final Bson query = and(
+                eq(Field.type, Field.TYPE_STRUCTURE),
+                eq(Field.STRUCTUREID, structureId)
+        );
+
+        mongo.findOne(this.collection, MongoQueryBuilder.build(query), validResultHandler(result -> {
+            if (result.isLeft()) {
+                log.error(String.format("[Calendar@%s::findStructureCalendar]: an error has occurred while finding structure calendar: %s",
+                        this.getClass().getSimpleName(), result.left().getValue()));
+                promise.fail(result.left().getValue());
+                return;
+            }
+            if (result.right().getValue() == null || result.right().getValue().isEmpty()) {
+                promise.fail("no.structure.calendar");
+                return;
+            }
+            promise.complete(result.right().getValue());
+        }));
+        return promise.future();
+    }
+
+    @Override
     public Future<JsonObject> getPlatformCalendar(UserInfos user, String platform) {
         Promise<JsonObject> promise = Promise.promise();
         // Query

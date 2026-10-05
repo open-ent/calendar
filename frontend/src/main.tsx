@@ -9,6 +9,10 @@ import { router } from './routes';
 import './i18n';
 import './index.css';
 
+// NB : cela remplace le contournement de 98a429b (plugin Vite retirant l'`@import
+// url("/theme/brand.css")` du CSS bundlé + <link> injecté ici). Sans CSS bundlé, il n'y a plus
+// d'`@import` à neutraliser, et c'est le navigateur qui résout celui de la feuille runtime.
+//
 // Le bootstrap openent n'est PAS bundlé : il est chargé au runtime via
 // <link href="/assets/themes/openent-bootstrap/index.css"> dans index.html et dans la vue
 // backend (view-src/calendar-react.html), comme pour blog / wiki / video. C'est cette feuille

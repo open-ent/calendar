@@ -127,4 +127,12 @@ public interface CalendarService {
      */
     Future<Void> setPortalPublication(String calendarId, boolean published, String userId);
 
+    /**
+     * Trouve l'agenda d'établissement (type="structure") d'une structure donnée.
+     *
+     * @param structureId id de la structure {@link String}
+     * @return {@link Future<JsonObject>} l'agenda, échoue si aucun n'existe pour cette structure
+     */
+    Future<JsonObject> findStructureCalendar(String structureId);
+
     }

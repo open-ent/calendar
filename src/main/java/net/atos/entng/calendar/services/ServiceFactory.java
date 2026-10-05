@@ -6,6 +6,7 @@ import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.WebClient;
 import net.atos.entng.calendar.Calendar;
+import net.atos.entng.calendar.services.impl.BookingProposalServiceMongo;
 import net.atos.entng.calendar.services.impl.CalendarServiceImpl;
 import net.atos.entng.calendar.services.impl.DefaultUserServiceImpl;
 import net.atos.entng.calendar.services.impl.PlatformServiceImpl;
@@ -55,6 +56,10 @@ public class ServiceFactory {
 
     public ReminderService reminderService(){
         return new ReminderServiceImpl(Calendar.REMINDERS_COLLECTION, mongoDb);
+    }
+
+    public BookingProposalService bookingProposalService(){
+        return new BookingProposalServiceMongo(Calendar.BOOKING_PROPOSALS_COLLECTION, mongoDb);
     }
 
     public ServiceFactory setWebClient(WebClient webClient) {

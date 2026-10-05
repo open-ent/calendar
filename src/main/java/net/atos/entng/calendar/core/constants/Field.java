@@ -136,6 +136,21 @@ public class Field {
     public static final String MESSAGE = "message";
     public static final String ERROR = "error";
 
+    //Booking proposal (point B2, agenda partagé)
+    public static final String PROPOSEDBY = "proposedBy";
+    public static final String BOOKINGPAYLOAD = "bookingPayload";
+    public static final String REFUSALREASON = "refusalReason";
+
+    //Diff de réservations RBS (point C, droit de partage granulaire "associer une réservation")
+    public static final String TOKEEP = "toKeep";
+    public static final String TOCREATE = "toCreate";
+    public static final String IDSTODELETE = "idsToDelete";
+    public static final String HASBOOKINGRIGHT = "hasBookingRight";
+    // Champ dédié sur le document calendrier (liste de {userId}/{groupId}) : le socle ENT
+    // n'autorisant que 5 rôles de partage figés (cf. ShareRoles), ce droit granulaire est stocké
+    // hors du mécanisme de partage générique.
+    public static final String BOOKINGRIGHTS = "bookingRights";
+
     //Config
     public static final String ENABLERBS = "enableRbs";
     public static final String ENABLE_RBS = "enable-rbs";

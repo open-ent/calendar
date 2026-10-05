@@ -108,8 +108,16 @@ export const sideBar = ng.directive('sideBar', () =>{
             }
 
             // Libellé affiché : l'agenda personnel par défaut (auto-créé « Agenda <nom> ») s'affiche
-            // « Mon agenda » pour son propriétaire ; les autres agendas gardent leur titre.
+            // « Mon agenda » pour son propriétaire ; les autres agendas gardent leur titre — SAUF
+            // un agenda d'établissement, dont le titre générique ("Agenda d'établissement") est
+            // identique pour tous : on y ajoute le nom de l'établissement (structureName, résolu
+            // côté backend via CalendarController#enrichStructureNames) pour distinguer visuellement
+            // le sien d'un établissement partagé par un AUTRE établissement (cas cross-établissement
+            // du point B2) sans avoir à survoler le tooltip propriétaire.
             vm.getCalendarTitle = (calendar: Calendar) : string => {
+                if (calendar && (<any>calendar).type === 'structure' && (<any>calendar).structureName) {
+                    return lang.translate('calendar.structure.calendar.title') + ' ' + (<any>calendar).structureName;
+                }
                 // « Mon agenda » uniquement si c'est l'agenda par défaut ET qu'il m'appartient
                 // (un agenda par défaut partagé par autrui garde is_default mais doit afficher son titre).
                 return (calendar && (<any>calendar).is_default && vm.isMyCalendar(calendar))
