@@ -42,6 +42,17 @@ export function formatDateTime(iso?: string): string {
     : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * Date d'une réservation RBS. Le serveur ne les renvoie PAS en ISO mais déjà mises en forme
+ * (« 25/08/26 15:48 ») — vérifié sur l'ENT local. On n'essaie donc de les formater que si elles
+ * s'avèrent analysables, sinon on affiche la chaîne telle quelle plutôt qu'un blanc.
+ */
+export function formatBookingDate(value?: string): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : formatDateTime(value);
+}
+
 /** Valeur `<input type="datetime-local">` (heure locale) -> ISO UTC (« …Z ») pour le backend. */
 export function localInputToIsoUtc(value: string): string {
   if (!value) return '';

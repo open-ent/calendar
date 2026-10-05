@@ -32,6 +32,17 @@ export interface Calendar {
   portalPublished?: boolean;
 }
 
+/**
+ * Une réservation de ressource (module RBS) rattachée à un événement. Le serveur la joint à
+ * l'événement ; sa suppression se demande au moment de supprimer l'événement.
+ */
+export interface EventBooking {
+  id: number;
+  start_date?: string;
+  end_date?: string;
+  resource?: { name?: string };
+}
+
 /** Un événement. Dates ISO (UTC) dans `startMoment`/`endMoment`. */
 export interface CalendarEvent {
   _id: string;
@@ -51,6 +62,8 @@ export interface CalendarEvent {
   recurrence?: Recurrence;
   /** Rang de l'occurrence dans sa série. */
   index?: number;
+  /** Réservations de ressources RBS faites pour cet événement. */
+  bookings?: EventBooking[];
 }
 
 /** Corps de création/màj d'un événement. */
@@ -240,8 +253,25 @@ export const createRecurrentEvents = async (
   }
 };
 
-export const deleteEvent = async (calendarId: string, eventId: string): Promise<void> => {
-  const res = await fetch(`/calendar/${calendarId}/event/${eventId}`, { ...base, method: 'DELETE', headers: xsrfHeader() });
+/**
+ * Supprime un événement. `deleteBookings` demande au serveur de supprimer AUSSI les réservations
+ * de ressources RBS attachées : sans ce paramètre elles restent, orphelines, dans le module RBS.
+ *
+ * Le serveur répond 400 quand il n'a pas pu toutes les supprimer (l'usager n'est ni propriétaire
+ * de la réservation ni de la ressource) : l'événement est alors bien supprimé, pas les réservations.
+ */
+export const deleteEvent = async (
+  calendarId: string,
+  eventId: string,
+  options: { deleteBookings?: boolean } = {},
+): Promise<void> => {
+  const query = options.deleteBookings ? '?deleteBookings=true' : '';
+  const res = await fetch(`/calendar/${calendarId}/event/${eventId}${query}`, {
+    ...base,
+    method: 'DELETE',
+    headers: xsrfHeader(),
+  });
+  if (res.status === 400) throw new Error('bookings-deletion-failed');
   if (!res.ok && res.status !== 204) throw new Error(String(res.status));
 };
 
