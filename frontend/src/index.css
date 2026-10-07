@@ -131,3 +131,12 @@
 .agenda-prewrap {
   white-space: pre-wrap;
 }
+
+/* Vignette d'une ressource du médiacentre, à côté de son intitulé. */
+.agenda-resource-thumb {
+  width: 3.2rem;
+  height: 3.2rem;
+  object-fit: cover;
+  border-radius: var(--openent-border-radius);
+  flex: 0 0 auto;
+}

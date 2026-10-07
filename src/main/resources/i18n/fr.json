@@ -342,5 +342,14 @@
   "calendar.reminder.day": "1 jour avant",
   "calendar.reminder.week": "1 semaine avant",
   "calendar.reminder.month": "1 mois avant",
-  "calendar.reminder.incomplete": "Choisissez au moins un canal et au moins une échéance."
+  "calendar.reminder.incomplete": "Choisissez au moins un canal et au moins une échéance.",
+  "calendar.event.attachment.add": "Ajouter une pièce jointe",
+  "calendar.event.attachment.none": "Aucune pièce jointe.",
+  "calendar.event.attachment.download": "Télécharger",
+  "calendar.event.resources": "Ressources du médiacentre",
+  "calendar.event.resources.none": "Aucune ressource.",
+  "calendar.event.resources.attached": "Déjà ajoutée",
+  "calendar.event.resources.mediacentre.sources.down": "Aucune source du médiacentre n'a répondu ([[sources]]). La recherche n'a pas pu aboutir.",
+  "calendar.event.resources.mediacentre.partial": "Certaines sources n'ont pas répondu ([[sources]]).",
+  "calendar.event.resources.mediacentre.error": "La recherche dans le médiacentre a échoué."
 }

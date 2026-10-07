@@ -5,18 +5,32 @@ import {
   FormControl,
   Input,
   Label,
+  MediaLibrary,
   Modal,
   TextArea,
+  useEdificeClient,
+  useMediaLibrary,
 } from '@open-ent/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { api, Calendar, CalendarEvent, EventInput, EventReminder } from '../api';
+import {
+  api,
+  Calendar,
+  CalendarEvent,
+  EventAttachment,
+  EventInput,
+  EventReminder,
+  EventResource,
+} from '../api';
+import { addAttachments, addResource, repairAttachment, toAttachment } from '../attachments';
 import { RecurrenceScope } from '../components/RecurrenceScopeModal';
 import { isReminderEnabled } from '../config';
 import { RecurrenceFields } from '../features/RecurrenceFields';
+import { AttachmentFields } from '../features/AttachmentFields';
 import { ReminderFields } from '../features/ReminderFields';
+import { MediacentrePicker } from './MediacentrePicker';
 import { emptyReminder, isReminderEmpty, isReminderValid } from '../reminders';
 import {
   defaultRecurrence,
@@ -50,6 +64,7 @@ export function EventDialog({
 }: EventDialogProps) {
   const { t } = useTranslation(['calendar', 'common']);
   const qc = useQueryClient();
+  const { appCode } = useEdificeClient();
   const editing = !!event;
 
   const [title, setTitle] = useState(event?.title ?? '');
@@ -62,6 +77,34 @@ export function EventDialog({
   const [location, setLocation] = useState(event?.location ?? '');
   const [description, setDescription] = useState(event?.description ?? '');
   const [formError, setFormError] = useState('');
+
+  // Pièces jointes du workspace et ressources du médiacentre.
+  const [attachments, setAttachments] = useState<EventAttachment[]>(
+    () => event?.attachments ?? [],
+  );
+  const [resources, setResources] = useState<EventResource[]>(() => event?.resources ?? []);
+  const [attachmentNotice, setAttachmentNotice] = useState('');
+  const [mediacentreOpen, setMediacentreOpen] = useState(false);
+  const { ref: mediaLibraryRef, ...mediaLibraryHandlers } = useMediaLibrary();
+
+  /** Reprend les fichiers choisis dans la médiathèque, sans ré-ajouter ceux déjà joints. */
+  const onPickFiles = (result: unknown) => {
+    const picked = Array.isArray(result) ? result : [result];
+    const incoming = picked
+      .map((f) => toAttachment(f as Parameters<typeof toAttachment>[0]))
+      .filter((a): a is EventAttachment => a !== null);
+    const merged = addAttachments(attachments, incoming);
+    setAttachments(merged.attachments);
+    setAttachmentNotice(
+      merged.duplicates > 0
+        ? t('calendar.event.attachment.already.added', {
+            defaultValue:
+              'Certains documents sont déjà joints : seuls les nouveaux ont été ajoutés.',
+          })
+        : '',
+    );
+    mediaLibraryRef.current?.hide();
+  };
 
   // La récurrence ne se règle qu'à la création : sur une série existante, le serveur ne sait
   // pas regénérer les occurrences, il ne fait que propager les champs.
@@ -147,6 +190,10 @@ export function EventDialog({
         : {}),
     // Un rappel vide n'est pas envoyé : le serveur créerait un rappel sans canal ni échéance.
     ...(remindersOn && !isReminderEmpty(reminder) ? { reminders: reminder } : {}),
+    // Les pièces jointes existantes repartent telles quelles, propriétaire remis à plat : les
+    // re-sérialiser ré-emboîtait `owner.userId` à chaque enregistrement (cf. `flattenOwner`).
+    attachments: attachments.map(repairAttachment),
+    resources,
   });
 
   const saveMut = useMutation({
@@ -323,6 +370,26 @@ export function EventDialog({
           <Input type="text" size="md" value={location} onChange={(e) => setLocation(e.target.value)} />
         </FormControl>
 
+        <fieldset className="border-0 p-0 m-0 mb-16">
+          <AttachmentFields
+            attachments={attachments}
+            resources={resources}
+            eventId={event?._id}
+            onAddFiles={() => {
+              setAttachmentNotice('');
+              mediaLibraryRef.current?.show('attachment');
+            }}
+            onRemoveAttachment={(id) => setAttachments(attachments.filter((a) => a._id !== id))}
+            onAddResource={() => setMediacentreOpen(true)}
+            onRemoveResource={(index) => setResources(resources.filter((_, i) => i !== index))}
+          />
+          {attachmentNotice && (
+            <Alert type="info" className="mt-8">
+              {attachmentNotice}
+            </Alert>
+          )}
+        </fieldset>
+
         <FormControl id="event-description">
           <Label>{t('calendar.event.description', { defaultValue: 'Description' })}</Label>
           <TextArea size="md" value={description} rows={3} onChange={(e) => setDescription(e.target.value)} />
@@ -348,6 +415,27 @@ export function EventDialog({
           {t('calendar.save', { defaultValue: 'Enregistrer' })}
         </Button>
       </Modal.Footer>
+
+      {mediacentreOpen && (
+        <MediacentrePicker
+          attached={resources}
+          onAdd={(resource) => {
+            const merged = addResource(resources, resource);
+            setResources(merged.resources);
+            return merged.added;
+          }}
+          onClose={() => setMediacentreOpen(false)}
+        />
+      )}
+
+      <MediaLibrary
+        appCode={appCode}
+        ref={mediaLibraryRef}
+        multiple
+        visibility="protected"
+        {...mediaLibraryHandlers}
+        onSuccess={onPickFiles}
+      />
     </Modal>
   );
 }

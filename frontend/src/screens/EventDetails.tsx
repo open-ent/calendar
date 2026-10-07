@@ -3,6 +3,7 @@ import { CSSProperties, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Calendar, CalendarEvent } from '../api';
+import { AttachmentFields } from '../features/AttachmentFields';
 import { calendarColor, formatDateTime, isMultiDay, isoTime } from '../utils';
 
 /**
@@ -83,6 +84,17 @@ export function EventDetails({
                 sans assainissement ouvrirait une faille. */}
             <span className="agenda-prewrap">{stripHtml(event.description)}</span>
           </Line>
+        )}
+
+        {((event.attachments?.length ?? 0) > 0 || (event.resources?.length ?? 0) > 0) && (
+          <div className="mb-12">
+            <AttachmentFields
+              attachments={event.attachments ?? []}
+              resources={event.resources ?? []}
+              eventId={event._id}
+              readOnly
+            />
+          </div>
         )}
 
         {event.isRecurrent && (

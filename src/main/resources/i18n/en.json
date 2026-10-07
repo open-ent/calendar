@@ -343,5 +343,14 @@
   "calendar.reminder.day": "1 day before",
   "calendar.reminder.week": "1 week before",
   "calendar.reminder.month": "1 month before",
-  "calendar.reminder.incomplete": "Choose at least one channel and at least one lead time."
+  "calendar.reminder.incomplete": "Choose at least one channel and at least one lead time.",
+  "calendar.event.attachment.add": "Add an attachment",
+  "calendar.event.attachment.none": "No attachment.",
+  "calendar.event.attachment.download": "Download",
+  "calendar.event.resources": "Mediacentre resources",
+  "calendar.event.resources.none": "No resource.",
+  "calendar.event.resources.attached": "Already added",
+  "calendar.event.resources.mediacentre.sources.down": "No mediacentre source responded ([[sources]]). The search could not complete.",
+  "calendar.event.resources.mediacentre.partial": "Some sources did not respond ([[sources]]).",
+  "calendar.event.resources.mediacentre.error": "The mediacentre search failed."
 }

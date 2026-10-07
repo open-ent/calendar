@@ -57,6 +57,51 @@ export interface EventReminder {
   reminderFrequency: { hour: boolean; day: boolean; week: boolean; month: boolean };
 }
 
+/**
+ * Pièce jointe d'un événement : un document du workspace, recopié dans l'événement sous la
+ * forme que produisait `Document.toJSON()` côté AngularJS.
+ */
+export interface EventAttachment {
+  _id: string;
+  name: string;
+  title?: string;
+  created?: string;
+  eParent?: string | null;
+  eType?: string;
+  metadata?: Record<string, unknown>;
+  version?: number;
+  link?: string;
+  icon?: string;
+  /** Peut arriver imbriqué dans les données existantes — cf. `flattenOwner`. */
+  owner?: unknown;
+  shared?: unknown[];
+}
+
+/** Ressource du médiacentre rattachée à un événement. */
+export interface EventResource {
+  type: 'mediacentre' | string;
+  id: string;
+  name: string;
+  url: string;
+  image: string;
+}
+
+/** Une ressource telle que la renvoie la recherche du médiacentre. */
+export interface MediacentreResource {
+  id?: string | number;
+  title?: string;
+  link?: string;
+  url?: string;
+  image?: string;
+}
+
+/** Une trame de réponse du médiacentre : une par source interrogée. */
+export interface MediacentreFrame {
+  status?: 'ok' | 'ko' | string;
+  error?: { source?: string; error?: string };
+  data?: { resources?: MediacentreResource[] };
+}
+
 /** Un événement. Dates ISO (UTC) dans `startMoment`/`endMoment`. */
 export interface CalendarEvent {
   _id: string;
@@ -80,6 +125,10 @@ export interface CalendarEvent {
   bookings?: EventBooking[];
   /** Rappel de l'usager courant sur cet événement, si la fonction est active. */
   reminders?: EventReminder;
+  /** Documents du workspace joints à l'événement. */
+  attachments?: EventAttachment[];
+  /** Ressources du médiacentre rattachées à l'événement. */
+  resources?: EventResource[];
 }
 
 /** Corps de création/màj d'un événement. */
@@ -105,6 +154,8 @@ export interface EventInput {
    * l'événement, puis crée ou met à jour le rappel selon la présence de `_id`.
    */
   reminders?: EventReminder;
+  attachments?: EventAttachment[];
+  resources?: EventResource[];
 }
 
 // ── Partage (modèle entcore batch, comme forum/rbs) ──────────────────────────
@@ -331,6 +382,38 @@ export const importIcal = async (calendarId: string, ics: string): Promise<IcsIm
   };
 };
 
+// ── Pièces jointes et médiacentre ────────────────────────────────────────────
+
+/**
+ * URL de téléchargement d'une pièce jointe. On passe toujours par la route du module plutôt
+ * que par le workspace : elle vérifie l'accès À L'ÉVÉNEMENT, ce qui la rend valable aussi bien
+ * pour le propriétaire du document que pour quelqu'un à qui l'événement a été partagé.
+ */
+export const attachmentDownloadUrl = (eventId: string, attachmentId: string): string =>
+  `/calendar/calendarevent/${eventId}/attachment/${attachmentId}`;
+
+/** Sources interrogées par la recherche du médiacentre, reprises de l'IHM AngularJS. */
+export const MEDIACENTRE_SOURCES = [
+  'fr.openent.mediacentre.source.GAR',
+  'fr.openent.mediacentre.source.Signet',
+  'fr.openent.mediacentre.source.Moodle',
+  'fr.openent.mediacentre.source.PMB',
+];
+
+/** Interroge le médiacentre. Chaque source répond sa propre trame, succès ou échec. */
+export const searchMediacentre = async (query: string): Promise<MediacentreFrame[]> => {
+  const jsondata = JSON.stringify({
+    state: 'PLAIN_TEXT',
+    event: 'search',
+    sources: MEDIACENTRE_SOURCES,
+    data: { query },
+  });
+  const res = await fetch(`/mediacentre/search?jsondata=${encodeURIComponent(jsondata)}`, base);
+  if (!res.ok) throw new Error(String(res.status));
+  const body = (await res.json()) as MediacentreFrame[] | null;
+  return Array.isArray(body) ? body : [];
+};
+
 // ── Préférences d'affichage ───────────────────────────────────────────────────
 // Mêmes clé et format que l'IHM AngularJS (`model/Calendar.ts#Preference`) : les agendas
 // cochés suivent l'usager d'une interface à l'autre et d'une session à l'autre.
@@ -398,6 +481,8 @@ export const api = {
   savePreference,
   icalExportUrl,
   importIcal,
+  attachmentDownloadUrl,
+  searchMediacentre,
   getCalendars,
   createCalendar,
   updateCalendar,
