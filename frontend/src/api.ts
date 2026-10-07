@@ -419,7 +419,14 @@ export const searchMediacentre = async (query: string): Promise<MediacentreFrame
 // cochés suivent l'usager d'une interface à l'autre et d'une session à l'autre.
 
 export interface CalendarPreference {
+  /** Agendas visibles — clé lue aussi par l'IHM AngularJS. */
   selectedCalendars: string[];
+  /**
+   * Agendas déjà connus de l'usager lors du dernier enregistrement. Champ propre à l'IHM React,
+   * ignoré par l'AngularJS : il permet de distinguer « agenda volontairement décoché » d'« agenda
+   * apparu depuis » (créé ailleurs, ou partagé avec l'usager), qui doit s'afficher d'emblée.
+   */
+  knownCalendars?: string[];
 }
 
 export const getPreference = async (): Promise<CalendarPreference | null> => {
@@ -429,9 +436,11 @@ export const getPreference = async (): Promise<CalendarPreference | null> => {
   if (!body?.preference) return null;
   try {
     const parsed = JSON.parse(body.preference) as Partial<CalendarPreference>;
-    return Array.isArray(parsed?.selectedCalendars)
-      ? { selectedCalendars: parsed.selectedCalendars }
-      : null;
+    if (!Array.isArray(parsed?.selectedCalendars)) return null;
+    return {
+      selectedCalendars: parsed.selectedCalendars,
+      knownCalendars: Array.isArray(parsed.knownCalendars) ? parsed.knownCalendars : undefined,
+    };
   } catch {
     // Préférence illisible (ancien format, écriture partielle) : on repart d'une page blanche.
     return null;

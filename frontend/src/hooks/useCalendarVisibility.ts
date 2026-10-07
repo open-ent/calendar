@@ -3,13 +3,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, Calendar } from '../api';
 
+interface Visibility {
+  /** Agendas cochés. */
+  selected: Set<string>;
+  /** Agendas déjà connus au dernier enregistrement. */
+  known: Set<string>;
+}
+
 /**
  * Agendas cochés dans la barre latérale, mémorisés d'une session à l'autre.
  *
- * Même préférence (`/userbook/preference/calendar`, clé `selectedCalendars`) que l'IHM
- * AngularJS, avec la même convention : la liste enregistrée EST la liste des agendas
- * visibles. Un agenda absent de la préférence est donc masqué — sauf tant qu'aucune
- * préférence n'a jamais été enregistrée, où tout est visible.
+ * La préférence est celle de l'IHM AngularJS (`/userbook/preference/calendar`, clé
+ * `selectedCalendars`), pour que la sélection suive d'une interface à l'autre. On y ajoute
+ * `knownCalendars`, qu'elle ignore : sans lui, un agenda APPARU depuis le dernier enregistrement
+ * — créé ailleurs, ou qu'on vient de vous partager — serait masqué, puisqu'il ne figure pas dans
+ * la liste des cochés. Un agenda inconnu est donc visible ; seul un agenda explicitement décoché
+ * reste masqué.
  */
 export function useCalendarVisibility(calendars: Calendar[]) {
   const preferenceQuery = useQuery({
@@ -19,46 +28,63 @@ export function useCalendarVisibility(calendars: Calendar[]) {
   });
 
   // `null` = préférence pas encore connue : on affiche tout en attendant.
-  const [visible, setVisible] = useState<Set<string> | null>(null);
+  const [visibility, setVisibility] = useState<Visibility | null>(null);
   const loaded = useRef(false);
 
   useEffect(() => {
     if (loaded.current || preferenceQuery.isPending) return;
     loaded.current = true;
-    const selected = preferenceQuery.data?.selectedCalendars;
-    if (selected) setVisible(new Set(selected));
+    const pref = preferenceQuery.data;
+    if (!pref) return;
+    setVisibility({
+      selected: new Set(pref.selectedCalendars),
+      // Préférence écrite par l'AngularJS (sans `knownCalendars`) : on considère connus les
+      // agendas cochés, les autres étant alors traités comme nouveaux et donc visibles.
+      known: new Set(pref.knownCalendars ?? pref.selectedCalendars),
+    });
   }, [preferenceQuery.isPending, preferenceQuery.data]);
 
-  const persist = useCallback((next: Set<string>) => {
-    setVisible(next);
-    // L'affichage ne doit pas dépendre de la réussite de l'enregistrement.
-    void api.savePreference({ selectedCalendars: [...next] }).catch(() => undefined);
-  }, []);
-
   const isVisible = useCallback(
-    (id: string) => (visible === null ? true : visible.has(id)),
-    [visible],
+    (id: string) => {
+      if (visibility === null) return true;
+      return visibility.selected.has(id) || !visibility.known.has(id);
+    },
+    [visibility],
+  );
+
+  const persist = useCallback(
+    (selected: Set<string>) => {
+      const known = new Set(calendars.map((c) => c._id));
+      setVisibility({ selected, known });
+      // L'affichage ne doit pas dépendre de la réussite de l'enregistrement.
+      void api
+        .savePreference({ selectedCalendars: [...selected], knownCalendars: [...known] })
+        .catch(() => undefined);
+    },
+    [calendars],
   );
 
   const toggle = useCallback(
     (id: string) => {
-      // Première bascule sans préférence connue : on part de « tout visible ».
-      const current = visible ?? new Set(calendars.map((c) => c._id));
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      persist(next);
+      // On repart de ce qui est RÉELLEMENT affiché : les agendas encore inconnus de la
+      // préférence sont visibles, et doivent le rester après la bascule d'un autre.
+      const current = new Set(calendars.filter((c) => isVisible(c._id)).map((c) => c._id));
+      if (current.has(id)) current.delete(id);
+      else current.add(id);
+      persist(current);
     },
-    [visible, calendars, persist],
+    [calendars, isVisible, persist],
   );
 
   /** Rend visible un agenda qu'on vient de créer ou d'ajouter. */
   const reveal = useCallback(
     (id: string) => {
-      if (visible === null || visible.has(id)) return;
-      persist(new Set(visible).add(id));
+      if (isVisible(id)) return;
+      const current = new Set(calendars.filter((c) => isVisible(c._id)).map((c) => c._id));
+      current.add(id);
+      persist(current);
     },
-    [visible, persist],
+    [calendars, isVisible, persist],
   );
 
   return { isVisible, toggle, reveal };
