@@ -7,7 +7,6 @@ import {
   Label,
   MediaLibrary,
   Modal,
-  TextArea,
   useEdificeClient,
   useMediaLibrary,
 } from '@open-ent/react';
@@ -29,6 +28,7 @@ import { RecurrenceScope } from '../components/RecurrenceScopeModal';
 import { isReminderEnabled } from '../config';
 import { RecurrenceFields } from '../features/RecurrenceFields';
 import { AttachmentFields } from '../features/AttachmentFields';
+import { DescriptionEditor } from '../features/DescriptionEditor';
 import { ReminderFields } from '../features/ReminderFields';
 import { MediacentrePicker } from './MediacentrePicker';
 import { emptyReminder, isReminderEmpty, isReminderValid } from '../reminders';
@@ -75,6 +75,8 @@ export function EventDialog({
   const [end, setEnd] = useState(isoUtcToLocalInput(event?.endMoment));
   const [allday, setAllday] = useState(event?.allday ?? false);
   const [location, setLocation] = useState(event?.location ?? '');
+  // La description est du HTML : l'ancienne interface l'écrit avec un éditeur riche, et le
+  // formulaire React l'affichait jusqu'ici en balises brutes dans une zone de texte.
   const [description, setDescription] = useState(event?.description ?? '');
   const [formError, setFormError] = useState('');
 
@@ -392,7 +394,12 @@ export function EventDialog({
 
         <FormControl id="event-description">
           <Label>{t('calendar.event.description', { defaultValue: 'Description' })}</Label>
-          <TextArea size="md" value={description} rows={3} onChange={(e) => setDescription(e.target.value)} />
+          <DescriptionEditor
+            id="event-description"
+            content={description}
+            mode="edit"
+            onChange={setDescription}
+          />
         </FormControl>
 
         {formError && (

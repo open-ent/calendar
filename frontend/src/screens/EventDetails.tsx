@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Calendar, CalendarEvent } from '../api';
 import { AttachmentFields } from '../features/AttachmentFields';
+import { DescriptionEditor } from '../features/DescriptionEditor';
 import { calendarColor, formatDateTime, isMultiDay, isoTime } from '../utils';
 
 /**
@@ -79,10 +80,9 @@ export function EventDetails({
 
         {event.description && (
           <Line label={t('calendar.event.description', { defaultValue: 'Description' })}>
-            {/* La description est saisie en HTML par l'IHM AngularJS (éditeur riche). Elle est
-                affichée en texte : le React ne sait pas encore l'éditer, et l'injecter en HTML
-                sans assainissement ouvrirait une faille. */}
-            <span className="agenda-prewrap">{stripHtml(event.description)}</span>
+            {/* La description est du HTML (éditeur riche). L'éditeur du socle en mode lecture
+                la rend proprement, et c'est lui qui assainit le contenu. */}
+            <DescriptionEditor content={event.description} mode="read" />
           </Line>
         )}
 
@@ -110,19 +110,6 @@ export function EventDetails({
       </Modal.Footer>
     </Modal>
   );
-}
-
-/**
- * Rend lisible une description écrite en HTML par l'ancienne interface.
- * `DOMParser` produit un document INERTE : ni script exécuté, ni ressource chargée —
- * contrairement à un `innerHTML` sur un élément détaché, où un `<img onerror>` se déclenche.
- */
-export function stripHtml(html: string): string {
-  const withBreaks = html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n');
-  const text = new DOMParser().parseFromString(withBreaks, 'text/html').body.textContent ?? '';
-  return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export default EventDetails;

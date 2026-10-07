@@ -127,11 +127,6 @@
   cursor: pointer;
 }
 
-/* Description reprise de l'ancienne interface : ses retours à la ligne sont significatifs. */
-.agenda-prewrap {
-  white-space: pre-wrap;
-}
-
 /* Vignette d'une ressource du médiacentre, à côté de son intitulé. */
 .agenda-resource-thumb {
   width: 3.2rem;
