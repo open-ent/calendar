@@ -1,7 +1,7 @@
 import { AppHeader, Breadcrumb, Button, useEdificeClient, useHasWorkflow } from '@open-ent/react';
 import { IconPlus } from '@open-ent/react/icons';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { api, Calendar, CalendarEvent } from '../api';
@@ -21,9 +21,14 @@ import {
 import { AgendaView, calendarColor, periodLabel, shiftCursor } from '../utils';
 import { CalendarDialog } from './CalendarDialog';
 import { DeleteEventModal } from './DeleteEventModal';
-import { EventDetails } from './EventDetails';
-import { EventDialog } from './EventDialog';
 import { IcsImportDialog } from './IcsImportDialog';
+
+// Le formulaire et la fiche d'un événement embarquent l'éditeur riche (tiptap, ~800 ko) : on
+// diffère leur chargement pour garder l'ouverture de l'agenda légère. La frontière `Suspense`
+// est posée ICI, hors de toute fenêtre modale : suspendre à l'intérieur d'une modale du socle,
+// animée par react-spring, lève une erreur React #321 et la fenêtre ne s'affiche jamais.
+const EventDialog = lazy(() => import('./EventDialog'));
+const EventDetails = lazy(() => import('./EventDetails'));
 import { PortalPublishDialog } from './PortalPublishDialog';
 import { ShareDialog } from './ShareDialog';
 
@@ -352,6 +357,7 @@ export function Agenda() {
         </div>
       </div>
 
+      <Suspense fallback={null}>
       {eventDialog && (
         <EventDialog
           calendars={writableCalendars}
@@ -368,6 +374,7 @@ export function Agenda() {
           onClose={() => setEventDetails(null)}
         />
       )}
+      </Suspense>
       {calendarDialog && (
         <CalendarDialog
           calendar={calendarDialog.mode === 'edit' ? calendarDialog.calendar : undefined}

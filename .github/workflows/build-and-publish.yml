@@ -83,8 +83,12 @@ jobs:
           node scripts/refresh-open-ent-lock.mjs
           pnpm install --no-frozen-lockfile
           pnpm build
-          mkdir -p ../src/main/resources/public
+          mkdir -p ../src/main/resources/public ../src/main/resources/view
           cp -r dist/public/. ../src/main/resources/public/
+          # La vue React est GÉNÉRÉE par Vite : ses fichiers portent une empreinte de contenu,
+          # dont seul le build connaît les noms. Elle ne vient donc pas de view-src/ — et doit
+          # être copiée APRÈS l'étape view-src -> view, qui ne la produit plus.
+          cp dist/index.html ../src/main/resources/view/calendar-react.html
 
       - name: Verify build outputs
         run: |
@@ -96,7 +100,12 @@ jobs:
           test -f src/main/resources/public/dist/application.js || { echo "::error::public/dist/application.js missing"; exit 1; }
           test -f src/main/resources/public/js/behaviours.js    || { echo "::error::public/js/behaviours.js missing"; exit 1; }
           test -f src/main/resources/public/css/calendar.css    || { echo "::error::public/css/calendar.css missing"; exit 1; }
-          test -f src/main/resources/public/index.js            || { echo "::error::public/index.js (React frontend/) missing"; exit 1; }
+          # Entrée React empreintée (index-<hash>.js) : on vérifie qu'il y en a exactement une,
+          # et que la vue générée la référence bien.
+          ENTRY=$(ls src/main/resources/public/index-*.js 2>/dev/null | head -1)
+          test -n "$ENTRY" || { echo "::error::public/index-<hash>.js (React frontend/) missing"; exit 1; }
+          grep -q "$(basename "$ENTRY")" src/main/resources/view/calendar-react.html \
+            || { echo "::error::view/calendar-react.html ne reference pas $(basename "$ENTRY")"; exit 1; }
 
       - name: Upload frontend assets
         uses: actions/upload-artifact@v7

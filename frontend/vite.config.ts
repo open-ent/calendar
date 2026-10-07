@@ -29,13 +29,20 @@ export default defineConfig(({ mode }) => ({
     assetsDir: 'public',
     rollupOptions: {
       output: {
-        // Noms stables → la vue backend référence des chemins fixes.
-        entryFileNames: 'public/index.js',
-        chunkFileNames: 'public/[name].js',
-        assetFileNames: (info) =>
-          info.name && info.name.endsWith('.css')
-            ? 'public/index.css'
-            : 'public/[name]-[hash][extname]',
+        /**
+         * Tout porte une empreinte de contenu, y compris l'entrée — comme blog, wiki et video.
+         *
+         * La vue n'est donc plus écrite à la main avec un `?v=<horodatage>` : elle est GÉNÉRÉE
+         * par Vite (`dist/index.html`) et référence les fichiers empreintés. Deux défauts
+         * disparaissent ensemble : l'entrée à nom fixe que les navigateurs resservaient après un
+         * déploiement, et la double URL qu'introduisait le `?v=` — un morceau différé importe
+         * l'entrée par `./index.js` SANS la requête, le navigateur y voit une autre ressource,
+         * la sert depuis son cache, et l'import échoue (« does not provide an export named … »)
+         * en laissant la fenêtre jamais rendue.
+         */
+        entryFileNames: 'public/[name]-[hash].js',
+        chunkFileNames: 'public/[name]-[hash].js',
+        assetFileNames: 'public/[name]-[hash][extname]',
       },
     },
   },

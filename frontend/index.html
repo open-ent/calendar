@@ -5,10 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{#i18n}}calendar.title{{/i18n}}</title>
     <link rel="icon" id="favicon" href="" />
-    <!-- Bootstrap openent partagé, chargé au runtime (comme le thème Angular) :
-         porte les couleurs de marque par déploiement (data-product / data-theme),
-         qui ne sont PAS dans le paquet npm figé à la version du dernier build. -->
+    <!-- Bootstrap openent partagé, chargé au runtime : le module suit le thème de
+         l'établissement sans recompilation, et porte les couleurs de marque par déploiement. -->
     <link rel="stylesheet" href="/assets/themes/openent-bootstrap/index.css" />
+    <!-- Drapeaux de configuration du module, exposés comme dans calendar.html (IHM AngularJS) :
+         le React n'a aucun autre moyen de les connaître, /calendar/config étant réservé aux
+         super-administrateurs. En développement (serveur Vite) ils restent indéfinis. -->
+    <script type="text/javascript">
+      window.ENABLE_RBS = {{enableRbs}};
+      window.ENABLE_ZIMBRA = {{enableZimbra}};
+      window.ENABLE_REMINDER = {{enableReminder}};
+    </script>
   </head>
   <body class="app-react" data-ode-app>
     <div id="root"></div>

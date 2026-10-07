@@ -1,17 +1,22 @@
-import { LoadingScreen } from '@open-ent/react';
-import type { EditorInstance } from '@open-ent/react/editor';
-import { lazy, Suspense } from 'react';
+import { Editor, type EditorInstance } from '@open-ent/react/editor';
 
 /**
- * Éditeur riche de la description, chargé à la demande.
+ * Éditeur riche de la description.
  *
- * `@open-ent/react/editor` embarque tiptap et ses extensions : plus d'un méga-octet, pour une
- * fonction qui ne sert qu'à l'ouverture d'un formulaire ou d'une fiche d'événement. Le charger
- * paresseusement garde le bundle de l'agenda léger, la grille étant ce qu'on affiche en premier.
+ * Importé DIRECTEMENT, et non en `lazy` : suspendre à l'intérieur de la fenêtre modale du socle,
+ * dont l'ouverture est animée par react-spring, lève une erreur React #321 et laisse la fenêtre
+ * entière non rendue. C'est l'ouverture des écrans qui le consomment qui est différée, depuis
+ * `Agenda` — la frontière `Suspense` est alors hors de toute modale.
  */
-const Editor = lazy(() =>
-  import('@open-ent/react/editor').then((m) => ({ default: m.Editor })),
-);
+
+/**
+ * Contenu initial de l'éditeur. Une chaîne VIDE le fait planter — erreur React #321 (appel de hook
+ * invalide) levée depuis le paquet de l'éditeur, qui laisse la fenêtre entière non rendue : le
+ * parcours « Nouvel événement » devenait inutilisable. On lui passe donc un paragraphe vide.
+ */
+function initialContent(content: string): string {
+  return content && content.trim() ? content : '<p></p>';
+}
 
 export interface DescriptionEditorProps {
   content: string;
@@ -23,10 +28,10 @@ export interface DescriptionEditorProps {
 
 export function DescriptionEditor({ content, mode, id, onChange }: DescriptionEditorProps) {
   return (
-    <Suspense fallback={<LoadingScreen position={false} />}>
+    <>
       <Editor
         id={id}
-        content={content}
+        content={initialContent(content)}
         mode={mode}
         focus={false}
         variant={mode === 'read' ? 'ghost' : 'outline'}
@@ -38,7 +43,7 @@ export function DescriptionEditor({ content, mode, id, onChange }: DescriptionEd
             : undefined
         }
       />
-    </Suspense>
+    </>
   );
 }
 
