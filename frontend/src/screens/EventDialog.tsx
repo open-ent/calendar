@@ -12,9 +12,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { api, Calendar, CalendarEvent, EventInput } from '../api';
+import { api, Calendar, CalendarEvent, EventInput, EventReminder } from '../api';
 import { RecurrenceScope } from '../components/RecurrenceScopeModal';
+import { isReminderEnabled } from '../config';
 import { RecurrenceFields } from '../features/RecurrenceFields';
+import { ReminderFields } from '../features/ReminderFields';
+import { emptyReminder, isReminderEmpty, isReminderValid } from '../reminders';
 import {
   defaultRecurrence,
   isOneDayEvent,
@@ -65,6 +68,14 @@ export function EventDialog({
   const [isRecurrent, setIsRecurrent] = useState(false);
   const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
 
+  // Rappel de l'usager sur cet événement. Le serveur le rattache à l'événement lu quand la
+  // fonction est active, ce qui permet de le pré-remplir et donc de le METTRE À JOUR (via `_id`)
+  // au lieu d'en créer un second.
+  const remindersOn = isReminderEnabled();
+  const [reminder, setReminder] = useState<EventReminder>(
+    () => event?.reminders ?? emptyReminder(),
+  );
+
   const startDate = useMemo(() => new Date(start), [start]);
   const endDate = useMemo(() => new Date(end), [end]);
   const datesValid =
@@ -106,6 +117,13 @@ export function EventDialog({
     return '';
   })();
 
+  const reminderError =
+    remindersOn && !isReminderValid(reminder)
+      ? t('calendar.reminder.incomplete', {
+          defaultValue: 'Choisissez au moins un canal et au moins une échéance.',
+        })
+      : '';
+
   const buildBody = (): EventInput => ({
     title: title.trim(),
     startMoment: localInputToIsoUtc(start),
@@ -127,6 +145,8 @@ export function EventDialog({
       : isRecurrent && recurrence
         ? { recurrence }
         : {}),
+    // Un rappel vide n'est pas envoyé : le serveur créerait un rappel sans canal ni échéance.
+    ...(remindersOn && !isReminderEmpty(reminder) ? { reminders: reminder } : {}),
   });
 
   const saveMut = useMutation({
@@ -165,6 +185,10 @@ export function EventDialog({
     }
     if (recurrenceError) {
       setFormError(recurrenceError);
+      return;
+    }
+    if (reminderError) {
+      setFormError(reminderError);
       return;
     }
     setFormError('');
@@ -282,6 +306,15 @@ export function EventDialog({
                 )}
               </>
             )}
+          </fieldset>
+        )}
+
+        {remindersOn && (
+          <fieldset className="border-0 p-0 m-0 mb-16">
+            <legend className="form-label">
+              {t('calendar.reminder', { defaultValue: 'Rappel' })}
+            </legend>
+            <ReminderFields reminder={reminder} onChange={setReminder} error={reminderError} />
           </fieldset>
         )}
 

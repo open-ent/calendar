@@ -11,6 +11,14 @@
     <!-- `@@VERSION` est remplacé par un horodatage au build (build.sh / CI), comme dans
          calendar.html : le bundle porte un nom fixe, sans quoi les navigateurs resserviraient
          indéfiniment l'ancien JS après un déploiement. -->
+    <!-- Drapeaux de configuration du module, exposés comme dans calendar.html (IHM AngularJS) :
+         le React n'a aucun autre moyen de les connaître, /calendar/config étant réservé aux
+         super-administrateurs. Ils conditionnent l'affichage des fonctions correspondantes. -->
+    <script type="text/javascript">
+      window.ENABLE_RBS = {{enableRbs}};
+      window.ENABLE_ZIMBRA = {{enableZimbra}};
+      window.ENABLE_REMINDER = {{enableReminder}};
+    </script>
     <script type="module" crossorigin src="/calendar/public/index.js?v=@@VERSION"></script>
     <link rel="stylesheet" crossorigin href="/calendar/public/index.css?v=@@VERSION">
   </head>

@@ -333,5 +333,15 @@
   "calendar.event.span.end": "until [[time]]",
   "calendar.recurrence.empty": "This recurrence produces no occurrence.",
   "calendar.recurrence.preview": "[[count]] occurrence(s) will be created.",
-  "calendar.event.recurrence.deletion": "You want to delete"
+  "calendar.event.recurrence.deletion": "You want to delete",
+  "calendar.reminder": "Reminder",
+  "calendar.reminder.type": "Notify me by",
+  "calendar.reminder.type.email": "Email",
+  "calendar.reminder.type.timeline": "Newsfeed",
+  "calendar.reminder.frequency": "When",
+  "calendar.reminder.hour": "1 hour before",
+  "calendar.reminder.day": "1 day before",
+  "calendar.reminder.week": "1 week before",
+  "calendar.reminder.month": "1 month before",
+  "calendar.reminder.incomplete": "Choose at least one channel and at least one lead time."
 }

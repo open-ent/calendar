@@ -332,5 +332,15 @@
   "calendar.event.span.end": "jusqu'à [[time]]",
   "calendar.recurrence.empty": "Cette récurrence ne produit aucune occurrence.",
   "calendar.recurrence.preview": "[[count]] occurrence(s) seront créées.",
-  "calendar.event.recurrence.deletion": "Vous souhaitez supprimer"
+  "calendar.event.recurrence.deletion": "Vous souhaitez supprimer",
+  "calendar.reminder": "Rappel",
+  "calendar.reminder.type": "Me prévenir par",
+  "calendar.reminder.type.email": "E-mail",
+  "calendar.reminder.type.timeline": "Fil de nouveautés",
+  "calendar.reminder.frequency": "Quand",
+  "calendar.reminder.hour": "1 heure avant",
+  "calendar.reminder.day": "1 jour avant",
+  "calendar.reminder.week": "1 semaine avant",
+  "calendar.reminder.month": "1 mois avant",
+  "calendar.reminder.incomplete": "Choisissez au moins un canal et au moins une échéance."
 }

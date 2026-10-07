@@ -43,6 +43,20 @@ export interface EventBooking {
   resource?: { name?: string };
 }
 
+/**
+ * Rappel d'un événement, pour l'usager courant. Le serveur stocke des dates calculées mais
+ * renvoie et accepte cette forme à cases (`ReminderConverter`), et ne rattache le rappel à
+ * l'événement lu que si `enableReminder` est actif dans la configuration du module.
+ */
+export interface EventReminder {
+  /** Présent quand le rappel existe déjà : c'est lui qui fait choisir au serveur mise à jour
+   *  plutôt que création. */
+  _id?: string;
+  eventId?: string;
+  reminderType: { email: boolean; timeline: boolean };
+  reminderFrequency: { hour: boolean; day: boolean; week: boolean; month: boolean };
+}
+
 /** Un événement. Dates ISO (UTC) dans `startMoment`/`endMoment`. */
 export interface CalendarEvent {
   _id: string;
@@ -64,6 +78,8 @@ export interface CalendarEvent {
   index?: number;
   /** Réservations de ressources RBS faites pour cet événement. */
   bookings?: EventBooking[];
+  /** Rappel de l'usager courant sur cet événement, si la fonction est active. */
+  reminders?: EventReminder;
 }
 
 /** Corps de création/màj d'un événement. */
@@ -84,6 +100,11 @@ export interface EventInput {
   index?: number;
   /** `false` pour ne pas déclencher de notification (occurrences intermédiaires). */
   sendNotif?: boolean;
+  /**
+   * Rappel à poser sur l'événement. Le serveur l'extrait du corps avant d'enregistrer
+   * l'événement, puis crée ou met à jour le rappel selon la présence de `_id`.
+   */
+  reminders?: EventReminder;
 }
 
 // ── Partage (modèle entcore batch, comme forum/rbs) ──────────────────────────
