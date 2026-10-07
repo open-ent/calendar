@@ -15,6 +15,9 @@
     <div class="right-magnet">
       <button workflow="calendar.admin" ng-click="newCalendar()"><i18n>calendar.new</i18n></button>
     </div>
+    <div class="right-magnet" ng-if="hasSelectedStructureCalendar()">
+      <button ng-click="showAvailability()"><i18n>calendar.availability.menu</i18n></button>
+    </div>
     <external-calendar-addition
             ng-if="checkExternalCalendarRight('calendar.sync')"
             display="display"

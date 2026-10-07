@@ -25,6 +25,14 @@ public class Field {
     public static final String UPDATED = "updated";
     public static final String ISUPDATING = "isUpdating";
     public static final String COLOR = "color";
+    // Calendar type ("structure"/"group"/personal) and owning structure, set at creation
+    // (POST /calendars/structure, /calendars/group)
+    public static final String STRUCTUREID = "structureId";
+    public static final String TYPE_STRUCTURE = "structure";
+    // Publication d'un agenda d'établissement sur le portail public (flux ICS anonyme)
+    public static final String PORTALPUBLISHED = "portalPublished";
+    public static final String PORTALPUBLISHEDBY = "portalPublishedBy";
+    public static final String PORTALPUBLISHEDAT = "portalPublishedAt";
 
     //Event infos
 
@@ -127,6 +135,21 @@ public class Field {
     public static final String RESULTS = "results";
     public static final String MESSAGE = "message";
     public static final String ERROR = "error";
+
+    //Booking proposal (point B2, agenda partagé)
+    public static final String PROPOSEDBY = "proposedBy";
+    public static final String BOOKINGPAYLOAD = "bookingPayload";
+    public static final String REFUSALREASON = "refusalReason";
+
+    //Diff de réservations RBS (point C, droit de partage granulaire "associer une réservation")
+    public static final String TOKEEP = "toKeep";
+    public static final String TOCREATE = "toCreate";
+    public static final String IDSTODELETE = "idsToDelete";
+    public static final String HASBOOKINGRIGHT = "hasBookingRight";
+    // Champ dédié sur le document calendrier (liste de {userId}/{groupId}) : le socle ENT
+    // n'autorisant que 5 rôles de partage figés (cf. ShareRoles), ce droit granulaire est stocké
+    // hors du mécanisme de partage générique.
+    public static final String BOOKINGRIGHTS = "bookingRights";
 
     //Config
     public static final String ENABLERBS = "enableRbs";

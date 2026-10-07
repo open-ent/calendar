@@ -10,6 +10,26 @@
             <input class="twelve cell" required ng-model="calendar.title" type="text"/>
         </div>
 
+        <!-- Type d'agenda (création uniquement) : options affichées selon les droits workflow -->
+        <div class="row" ng-if="!calendar._id && (canCreateStructureCalendar() || canCreateGroupCalendar())">
+            <label class="twelve cell"><i18n>calendar.type</i18n></label>
+            <label class="radio-inline">
+                <input type="radio" ng-model="calendar.type" value="personal" ng-change="onChangeCalendarType()"/>
+                <i18n>calendar.type.personal</i18n>
+            </label>
+            <label class="radio-inline" ng-if="canCreateStructureCalendar()">
+                <input type="radio" ng-model="calendar.type" value="structure" ng-change="onChangeCalendarType()"/>
+                <i18n>calendar.type.structure</i18n>
+            </label>
+            <label class="radio-inline" ng-if="canCreateGroupCalendar()">
+                <input type="radio" ng-model="calendar.type" value="group" ng-change="onChangeCalendarType()"/>
+                <i18n>calendar.type.group</i18n>
+            </label>
+        </div>
+        <div class="row message info" ng-if="!calendar._id && (calendar.type === 'structure' || calendar.type === 'group')">
+            <i18n>calendar.type.share.hint</i18n>
+        </div>
+
         <div class="row">
             <label class="twelve cell"><i18n>calendar.color</i18n></label>
             <color-selector ng-model='calendar.color'></color-selector>

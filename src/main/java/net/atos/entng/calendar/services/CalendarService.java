@@ -117,4 +117,22 @@ public interface CalendarService {
      */
     Future<JsonObject> getPlatformCalendar(UserInfos user, String platform);
 
+    /**
+     * Publie ou dépublie un agenda d'établissement sur le portail public (flux ICS anonyme).
+     *
+     * @param calendarId id de l'agenda {@link String}
+     * @param published  true pour publier, false pour dépublier {@link boolean}
+     * @param userId     id de l'ADML à l'origine de la publication, null en dépublication {@link String}
+     * @return {@link Future<Void>} réponse
+     */
+    Future<Void> setPortalPublication(String calendarId, boolean published, String userId);
+
+    /**
+     * Trouve l'agenda d'établissement (type="structure") d'une structure donnée.
+     *
+     * @param structureId id de la structure {@link String}
+     * @return {@link Future<JsonObject>} l'agenda, échoue si aucun n'existe pour cette structure
+     */
+    Future<JsonObject> findStructureCalendar(String structureId);
+
     }

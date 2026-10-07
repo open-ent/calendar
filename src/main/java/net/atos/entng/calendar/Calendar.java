@@ -59,6 +59,7 @@ public class Calendar extends BaseServer {
     public static final String PLATFORMS_COLLECTION = "calendar.platforms";
     public static final String DOCUMENTS_COLLECTION = "documents";
     public static final String REMINDERS_COLLECTION = "calendar.reminders";
+    public static final String BOOKING_PROPOSALS_COLLECTION = "calendar.bookingProposals";
 
     public static final String MANAGE_RIGHT_ACTION = "net-atos-entng-calendar-controllers-CalendarController|updateCalendar";
 
@@ -98,6 +99,7 @@ public class Calendar extends BaseServer {
         addController(new EventController(CALENDAR_EVENT_COLLECTION, eventService, serviceFactory, timelineHelper, storage, eb, config));
         addController(new PlatformController(PLATFORMS_COLLECTION, serviceFactory));
         addController(new ReminderController(REMINDERS_COLLECTION, serviceFactory, eb));
+        addController(new BookingProposalController(BOOKING_PROPOSALS_COLLECTION, serviceFactory, eventService, timelineHelper, eb, config));
 
         // External Import Calendar services
         vertx.deployVerticle(ExternalImportICal.class, new DeploymentOptions().setConfig(config).setWorker(true));

@@ -53,6 +53,10 @@ export class CalendarEvent implements Selectable, Shareable{
     editAllRecurrence: boolean;
     isMultiDayPart: boolean;
     attachments: Array<Document>;
+    // Ressources du médiacentre attachées (distinctes des attachments workspace, cf toJSON :
+    // les attachments sont forcés à travers Document.toJSON(), incompatible avec la forme
+    // {type, id, name, url, image} d'une ressource médiacentre).
+    resources: Array<any>;
     hasBooking: boolean;
     bookings: Array<SavedBooking|Booking>;
     deleteAllBookings: boolean;
@@ -70,7 +74,6 @@ export class CalendarEvent implements Selectable, Shareable{
             for (let key in calendarEvent){
                 if(typeof calendarEvent[key] !== "function") this[key] = calendarEvent[key];
             }
-            this.myRights.fromBehaviours();
         }
     }
 
@@ -96,8 +99,15 @@ export class CalendarEvent implements Selectable, Shareable{
 
     async create(){
         this.editDateBeforeSend(true);
-        let {data : {_id : id}} = await http.post('/calendar/' + this.calendar[0]._id + '/events', this.toJSON());
-        this._id = id;
+        const body = this.toJSON();
+        // Le backend ne crée l'événement que dans le calendrier de l'URL (:id) — body.calendar
+        // (rempli par getCalendarId(), potentiellement plusieurs agendas cochés dans le multi-combo
+        // du formulaire) n'y sert qu'à une vérification "aucun agenda externe", pas à une création
+        // multiple. Si plusieurs agendas sont sélectionnés, on poste donc une copie par agenda.
+        const results = await Promise.all(
+            this.calendar.map((calendar) => http.post('/calendar/' + calendar._id + '/events', body))
+        );
+        this._id = results[0].data._id;
     };
 
     async update(){
@@ -159,7 +169,30 @@ export class CalendarEvent implements Selectable, Shareable{
             // Warning : if format() is changed below, it must be changed in net.atos.entng.calendar.helpers.EventHelper.create() too.
             notifStartMoment: this.notifStartMoment.format("DD/MM/YYYY HH:mm"),
             notifEndMoment: this.notifEndMoment.format("DD/MM/YYYY HH:mm"),
-            attachments : this.attachments ? this.attachments.map((attachment: Document) => new Document(attachment).toJSON()) : [],
+            // Une pièce jointe relue du serveur a déjà owner:{userId,displayName}. La refaire passer
+            // par new Document(attachment) réemboîte owner.userId (déjà un objet) dans un nouveau
+            // niveau -> owner.userId.userId.userId... grandit à chaque enregistrement successif du
+            // même événement (ex : récurrence) jusqu'à faire planter le backend (500). On ne
+            // ré-sérialise que les pièces jointes réellement neuves (owner encore une chaîne brute).
+            attachments : this.attachments ? this.attachments.map((attachment: any) => {
+                const alreadySerialized: boolean = attachment && attachment.owner
+                    && typeof attachment.owner === 'object' && typeof attachment.owner.userId === 'string';
+                if (alreadySerialized) {
+                    // Ne pas re-sérialiser (voir ci-dessus), mais quand même exclure $$hashKey
+                    // (Angular, ng-repeat de la liste des pièces jointes) : MongoDB refuse aussi
+                    // ce préfixe "$" sur ce champ.
+                    const {$$hashKey, ...clean} = attachment;
+                    return clean;
+                }
+                return new Document(attachment).toJSON();
+            }) : [],
+            // MongoDB interdit les noms de champ préfixés par "$" dans un document stocké. Angular
+            // ajoute automatiquement `$$hashKey` aux objets utilisés dans un ng-repeat (ex : la liste
+            // de résultats de recherche du picker médiacentre) -> ce champ parasite finit dans le
+            // payload et fait planter la sauvegarde (500). On ne renvoie que les champs attendus.
+            resources: (this.resources || []).map((r: any) => ({
+                type: r.type, id: r.id, name: r.name, url: r.url, image: r.image
+            })),
             bookings: this.bookings,
             hasBooking: this.hasBooking
         }

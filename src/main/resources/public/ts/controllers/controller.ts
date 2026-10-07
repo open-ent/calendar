@@ -1,9 +1,10 @@
 import { IScope } from "angular";
-import { AxiosResponse } from "axios";
+import http, { AxiosResponse } from "axios";
 import { $, _, angular, Document, idiom as lang, moment, ng, notify, template, toasts } from "entcore";
 import { Moment } from "moment";
 import { Subject } from "rxjs";
 import { FORMAT } from "../core/const/date-format";
+import { rights } from "../model/constantes/RIGHTS";
 import { RBS_SNIPLET } from "../core/const/rbs-sniplet.const";
 import { DAY_OF_WEEK } from "../core/enum/dayOfWeek.enum";
 import { PERIODE_TYPE } from "../core/enum/period-type.enum";
@@ -35,7 +36,7 @@ import {
     safeApply,
     utcTime
 } from "../model/Utils";
-import { attachmentService, calendarService } from "../services";
+import { attachmentService, availabilityService, calendarService } from "../services";
 import { reminderService } from "../services/reminder.service";
 import { DateUtils } from "../utils/date.utils";
 import { externalCalendarUtils } from "../utils/externalCalendarUtils";
@@ -354,6 +355,13 @@ export const calendarController = ng.controller('CalendarController',
             if (calendarEvent.isRecurrent) {
                 if (!$scope.calendarEvent.recurrence.end_on) {
                     $scope.calendarEvent.recurrence.end_on = moment($scope.calendarEvent.endMoment).add(1, 'days').hours(0).minutes(0).seconds(0).milliseconds(0);
+                }
+                // end_type (radio "se termine le" / "après N occurrences") est un champ requis du
+                // formulaire mais n'avait aucune valeur par défaut : à l'activation de la récurrence,
+                // le formulaire restait invalide (boutons Enregistrer grisés) sans aucune indication
+                // visuelle, puisque end_on est déjà pré-rempli ci-dessus. On aligne les deux.
+                if (!$scope.calendarEvent.recurrence.end_type) {
+                    $scope.calendarEvent.recurrence.end_type = 'on';
                 }
                 if(!$scope.isOneDayEvent()){
                     $scope.calendarEvent.recurrence.start_on =  moment($scope.calendarEvent.startMoment).add(1, 'days').hours(0).minutes(0).seconds(0).milliseconds(0);
@@ -752,10 +760,30 @@ export const calendarController = ng.controller('CalendarController',
                 }
             };
 
+            // Droits de création des agendas typés (workflow, distribués via la console).
+            $scope.canCreateStructureCalendar = (): boolean => model.me.hasWorkflow(rights.workflow.createStructureCalendar);
+            $scope.canCreateGroupCalendar = (): boolean => model.me.hasWorkflow(rights.workflow.createGroupCalendar);
+
+            // Au changement de type dans le formulaire : renseigner structureId pour un agenda
+            // d'établissement (structure courante par défaut) et nettoyer les champs non pertinents.
+            $scope.onChangeCalendarType = (): void => {
+                if ($scope.calendar.type === 'structure') {
+                    $scope.calendar.structureId = (model.me.structures && model.me.structures.length)
+                        ? model.me.structures[0] : undefined;
+                    $scope.calendar.groupId = undefined;
+                } else if ($scope.calendar.type === 'group') {
+                    $scope.calendar.structureId = undefined;
+                } else {
+                    $scope.calendar.structureId = undefined;
+                    $scope.calendar.groupId = undefined;
+                }
+            };
+
             $scope.newCalendar = function () {
                 $scope.calendarCreationScreen = true;
                 $scope.calendar = new Calendar();
                 $scope.calendar.color = defaultColor;
+                $scope.calendar.type = 'personal';
                 template.open('calendar', 'edit-calendar');
             };
 
@@ -782,6 +810,16 @@ export const calendarController = ng.controller('CalendarController',
                 originalEvent == undefined ? toasts.warning(lang.translate('calendar.event.get.error')) : $scope.resetMultipleDayEventInfo(originalEvent);
             }
             $scope.calendar = calendarEvent.calendar[0];
+            // Pré-sélectionne l'agenda d'appartenance de l'événement dans le sélecteur
+            // d'édition (sinon le menu déroulant s'ouvre vide et l'utilisateur doit le
+            // resélectionner manuellement — risque de mauvaise affectation).
+            $scope.calendarAsContribRight = new Array<Calendar>();
+            $scope.selectedCalendarInEvent = new Array<Calendar>();
+            setListCalendarWithContribFilter();
+            if (Array.isArray(calendarEvent.calendar)) {
+                $scope.selectedCalendarInEvent = $scope.calendarAsContribRight.filter(
+                    (c: Calendar) => calendarEvent.calendar.some((ec: Calendar) => ec._id === c._id));
+            }
             $scope.createContentToWatch();
             $scope.calendarEvent.showDetails = true;
              if (!$scope.calendarEvent.parentId) {
@@ -1025,11 +1063,22 @@ export const calendarController = ng.controller('CalendarController',
                     $scope.calendarEvents.applyFilters();
 
                 } else {
+                    const createdType: string = $scope.calendar.type;
                     await $scope.calendar.save();
                     handleCalendarDisplay($scope.calendar);
                     await $scope.updateCalendars();
                     $scope.loadCalendarEvents();
                     $scope.display.showToggleButtons = false;
+                    // Agenda établissement/groupe : enchaîner sur le partage (share-panel complet)
+                    // pour le rendre visible aux membres de la structure / du groupe.
+                    if (createdType === 'structure' || createdType === 'group') {
+                        const created: Calendar = $scope.calendars.all.find((c: Calendar) => c._id === $scope.calendar._id);
+                        if (created) { $scope.calendar = created; }
+                        $scope.calendarCreationScreen = false;
+                        $scope.display.showPanelCalendar = true;
+                        safeApply($scope);
+                        return;
+                    }
                 }
                 safeApply($scope);
                 $scope.showCalendar();
@@ -1145,7 +1194,67 @@ export const calendarController = ng.controller('CalendarController',
             $scope.shareCalendar = function (calendar, event) {
                 $scope.calendar = calendar;
                 $scope.display.showPanelCalendar = true;
+                $scope.loadBookingRights();
                 event.stopPropagation();
+            };
+
+            // Point C : droit de partage granulaire "associer une réservation RBS" — hors du
+            // composant `share-panel` générique du socle (limité à 5 rôles figés, cf. mémoire
+            // openent-shareroles-5-roles-figes), stocké/édité via des endpoints dédiés.
+            $scope.bookingRights = { collaborators: [], loading: false };
+
+            $scope.loadBookingRights = async function (): Promise<void> {
+                if (!$scope.calendar || !$scope.calendar._id) {
+                    $scope.bookingRights.collaborators = [];
+                    return;
+                }
+                $scope.bookingRights.loading = true;
+                try {
+                    const response = await http.get(`/calendar/${$scope.calendar._id}/booking-rights`);
+                    $scope.bookingRights.collaborators = response.data || [];
+                } catch (e) {
+                    $scope.bookingRights.collaborators = [];
+                }
+                $scope.bookingRights.loading = false;
+                safeApply($scope);
+            };
+
+            $scope.toggleBookingRight = async function (collaborator): Promise<void> {
+                collaborator.hasBookingRight = !collaborator.hasBookingRight;
+                const userIds = $scope.bookingRights.collaborators
+                    .filter((c: any) => c.hasBookingRight)
+                    .map((c: any) => c.userId);
+                try {
+                    await http.put(`/calendar/${$scope.calendar._id}/booking-rights`, { userIds, groupIds: [] });
+                } catch (e) {
+                    // échec : on revient à l'état précédent plutôt que de laisser la case mentir
+                    collaborator.hasBookingRight = !collaborator.hasBookingRight;
+                }
+                safeApply($scope);
+            };
+
+            /** Publication/dépublication d'un agenda d'établissement sur le portail public (flux ICS anonyme). */
+            $scope.openPortalPublish = function (calendar, event) {
+                $scope.calendar = calendar;
+                $scope.display.showPanelPortalPublish = true;
+                event.stopPropagation();
+            };
+
+            $scope.closePortalPublish = function () {
+                $scope.display.showPanelPortalPublish = false;
+            };
+
+            $scope.togglePortalPublish = async function () {
+                try {
+                    if ($scope.calendar.portalPublished) {
+                        await $scope.calendar.portalUnpublish();
+                    } else {
+                        await $scope.calendar.portalPublish();
+                    }
+                } catch (err) {
+                    toasts.warning(lang.translate('calendar.portalpublish.error'));
+                }
+                safeApply($scope);
             };
 
             $scope.shareEvent = function (calendarEvent, event) {
@@ -1271,8 +1380,21 @@ export const calendarController = ng.controller('CalendarController',
                     }
                 });
             $scope.calendarAsContribRight = unique($scope.calendarAsContribRight);
-            let defaultCalendar: Calendar = $scope.calendarAsContribRight.find(cal => cal.is_default == true);
-            $scope.selectedCalendarInEvent.push(defaultCalendar ? defaultCalendar : $scope.calendarAsContribRight[0]);
+            // Pré-coche, dans le multi-combo du formulaire, TOUS les agendas actuellement
+            // sélectionnés (cl.selected, cf side-bar.html — pas la case à cocher secondaire
+            // showButtons/hideOtherCalendarCheckboxes qui ne fait qu'afficher les icônes
+            // d'action) parmi ceux où l'utilisateur a un droit de contribution. L'événement sera
+            // alors créé dans chacun d'eux (changeCalendarEventCalendar + CalendarEvent.create).
+            // Sans agenda sélectionné avec droit de contribution, on retombe sur l'agenda
+            // personnel par défaut.
+            const selected: Calendar[] = $scope.calendars.selected
+                .filter((cal: Calendar) => $scope.calendarAsContribRight.some((c: Calendar) => c._id === cal._id));
+            if (selected.length > 0) {
+                selected.forEach((cal: Calendar) => $scope.selectedCalendarInEvent.push(cal));
+            } else {
+                let defaultCalendar: Calendar = $scope.calendarAsContribRight.find(cal => cal.is_default == true);
+                $scope.selectedCalendarInEvent.push(defaultCalendar ? defaultCalendar : $scope.calendarAsContribRight[0]);
+            }
             $scope.selectedCalendarInEvent = unique($scope.selectedCalendarInEvent);
         }
 
@@ -1822,9 +1944,112 @@ export const calendarController = ng.controller('CalendarController',
                 $scope.eventDocuments = angular.element(document.getElementsByTagName("media-library")).scope();
                 $scope.calendarEvent.attachments = $scope.calendarEvent.attachments ? $scope.calendarEvent.attachments : [];
                 if ($scope.eventDocuments.documents) {
-                    $scope.calendarEvent.attachments = [...$scope.calendarEvent.attachments, ...$scope.eventDocuments.documents];
+                    // Anti-doublon : on n'ajoute pas une pièce jointe déjà présente (même _id).
+                    // On ajoute les nouvelles et on signale (toast) celles déjà attachées.
+                    const existingIds: Array<string> = $scope.calendarEvent.attachments.map((a: Document) => a._id);
+                    const toAdd: Array<Document> = [];
+                    let duplicates: number = 0;
+                    $scope.eventDocuments.documents.forEach((doc: Document) => {
+                        const alreadyThere: boolean = existingIds.indexOf(doc._id) !== -1
+                            || toAdd.some((d: Document) => d._id === doc._id);
+                        if (alreadyThere) {
+                            duplicates++;
+                        } else {
+                            toAdd.push(doc);
+                        }
+                    });
+                    if (toAdd.length) {
+                        $scope.calendarEvent.attachments = [...$scope.calendarEvent.attachments, ...toAdd];
+                    }
+                    if (duplicates > 0) {
+                        // Différé : selectDocuments() du media-library lève « $apply already in progress »
+                        // (bug infra-front) qui perturbe le digest courant ; on rend le toast au tick suivant.
+                        $timeout(() => toasts.info(lang.translate('calendar.event.attachment.already.added')));
+                    }
                 }
                 $scope.display.attachmentLightbox = false;
+            };
+
+            // --- Ressources du médiacentre (recherche) ---
+            const MEDIACENTRE_SOURCES: string[] = [
+                'fr.openent.mediacentre.source.GAR',
+                'fr.openent.mediacentre.source.Signet',
+                'fr.openent.mediacentre.source.Moodle',
+                'fr.openent.mediacentre.source.PMB'
+            ];
+            $scope.mediacentreQuery = '';
+            $scope.mediacentreResources = [];
+            $scope.mediacentreLoading = false;
+            $scope.mediacentreSearched = false;
+
+            $scope.openEventMediacentrePicker = (): void => {
+                $scope.mediacentreQuery = '';
+                $scope.mediacentreResources = [];
+                $scope.mediacentreSearched = false;
+                $scope.display.mediacentrePicker = true;
+            };
+
+            $scope.searchMediacentre = async (queryArg?: string): Promise<void> => {
+                // queryArg = valeur du champ (scope enfant du <lightbox>) ; fallback scope parent.
+                const q: string = ((queryArg != null ? queryArg : $scope.mediacentreQuery) || '').trim();
+                if (!q) { return; }
+                $scope.mediacentreLoading = true;
+                $scope.mediacentreResources = [];
+                safeApply($scope);
+                const jsondata: string = JSON.stringify({
+                    state: 'PLAIN_TEXT', event: 'search',
+                    sources: MEDIACENTRE_SOURCES, data: {query: q}
+                });
+                try {
+                    const {data}: any = await http.get('/mediacentre/search?jsondata=' + encodeURIComponent(jsondata));
+                    const frames: any[] = Array.isArray(data) ? data : [];
+                    const resources: any[] = [];
+                    frames.forEach((f: any) => {
+                        const list: any[] = (f && f.data && Array.isArray(f.data.resources)) ? f.data.resources : [];
+                        list.forEach((r: any) => resources.push(r));
+                    });
+                    $scope.mediacentreResources = resources;
+                } catch (e) {
+                    $scope.mediacentreResources = [];
+                }
+                $scope.mediacentreSearched = true;
+                $scope.mediacentreLoading = false;
+                safeApply($scope);
+            };
+
+            $scope.addEventMediacentreResource = (res: any): void => {
+                if (!$scope.calendarEvent.resources) { $scope.calendarEvent.resources = []; }
+                const id: string = (res.id != null) ? String(res.id) : (res.link || res.title);
+                const already: boolean = $scope.calendarEvent.resources
+                    .some((r: any) => r.type === 'mediacentre' && String(r.id) === String(id));
+                if (already) {
+                    toasts.info(lang.translate('calendar.event.attachment.already.added'));
+                } else if (id) {
+                    $scope.calendarEvent.resources.push({
+                        type: 'mediacentre', id: id,
+                        name: res.title || res.link || id,
+                        url: res.link || res.url || '',
+                        image: res.image || ''
+                    });
+                    // La lightbox reste ouverte (pour ajouter plusieurs ressources d'affilée) : sans
+                    // ce toast, l'ajout est invisible car la liste résultante est masquée derrière elle.
+                    toasts.confirm(lang.translate('calendar.event.resources.mediacentre.added'));
+                }
+            };
+
+            $scope.removeEventResource = (index: number): void => {
+                if ($scope.calendarEvent.resources) { $scope.calendarEvent.resources.splice(index, 1); }
+            };
+
+            // Certains documents ont un metadata.filename encodé (ex : "mon%20document.pdf") selon
+            // leur origine d'upload. Décodage défensif (no-op si déjà propre) pour un affichage correct.
+            $scope.decodeFileName = (filename: string): string => {
+                if (!filename) { return filename; }
+                try {
+                    return decodeURIComponent(filename);
+                } catch (e) {
+                    return filename;
+                }
             };
 
             $scope.removeDocumentFromAttachments = (documentId: String): void => {
@@ -1934,5 +2159,194 @@ export const calendarController = ng.controller('CalendarController',
                 model.calendar.firstDay.year(newDate.year());
                 await $scope.syncSelectedCalendars();
                 template.open('calendar', 'read-calendar');
+            };
+
+            // ─────────────────────────────────────────────────────────────────────
+            // Partie 5 (chantier "vue consolidée EDT+RBS") : panneau "Disponibilité EDT +
+            // RBS" de l'agenda d'établissement — consultation en lecture seule des créneaux
+            // déjà occupés (Emploi du temps + réservations RBS) pour les ressources de la
+            // structure, sans passer par le module rbs. Même vocabulaire que
+            // modules/rbs/.../controller.ts ($scope.availability, mode 'week'/'day') pour
+            // rester reconnaissable, mais un seul aller-retour par source (pas un par
+            // ressource comme dans RBS) : cf. availability.service.ts.
+            // ─────────────────────────────────────────────────────────────────────
+
+            $scope.availability = {
+                resources: [],
+                typeNames: [],
+                selectedResource: 'ALL',
+                // Point E : structures de l'utilisateur (model.me.structures/structureNames, deux
+                // listes parallèles — même patron de reconstruction {id, name} que
+                // modules/rbs/.../models.ts model.loadStructures) ; selectedStructureId n'est
+                // renseigné qu'au premier calcul (cf. getAvailabilityStructureId), le sélecteur du
+                // template n'apparaît que si plus d'une structure.
+                structures: (model.me.structures || []).map((id: string, i: number) => ({
+                    id, name: (model.me.structureNames && model.me.structureNames[i]) || id,
+                })),
+                selectedStructureId: undefined,
+                weekStart: moment().startOf('week'),
+                pickedDate: new Date(),
+                mode: 'week',
+                slots: [],
+                loading: false,
+            };
+
+            // Point D/E : le panneau n'est plus limité à l'agenda d'ÉTABLISSEMENT actuellement
+            // affiché (coché dans la side-bar) — utilisable depuis n'importe quel agenda non
+            // externe (personnel, de groupe, d'établissement). Établissement retenu, par ordre de
+            // priorité : (1) celui explicitement choisi dans le sélecteur du panneau (point E,
+            // $scope.availability.selectedStructureId) ; (2) celui de l'agenda structure
+            // actuellement sélectionné dans la side-bar (comportement historique, préservé —
+            // $scope.calendar est réutilisé ailleurs comme modèle de formulaire, donc pas fiable
+            // pour identifier "l'agenda ouvert") ; (3) la première structure de l'utilisateur
+            // (model.me.structures, même patron que $scope.onChangeCalendarType ci-dessus). Le
+            // résultat (2)/(3) est mémorisé dans selectedStructureId pour que le sélecteur reflète
+            // le choix par défaut dès l'ouverture, sans appel supplémentaire.
+            const getAvailabilityStructureId = (): string | undefined => {
+                if ($scope.availability.selectedStructureId) {
+                    return $scope.availability.selectedStructureId;
+                }
+                const structureCalendar = (($scope.calendars && $scope.calendars.selected) || [])
+                    .find((cal: Calendar) => cal.type === 'structure');
+                const resolved = (structureCalendar && structureCalendar.structureId)
+                    ? structureCalendar.structureId
+                    : ((model.me.structures && model.me.structures.length > 0) ? model.me.structures[0] : undefined);
+                $scope.availability.selectedStructureId = resolved;
+                return resolved;
+            };
+
+            $scope.hasSelectedStructureCalendar = (): boolean => !!getAvailabilityStructureId();
+
+            // Point E : changement explicite d'établissement depuis le panneau — les ressources
+            // RBS sont propres à une structure (cf. loadAvailabilityResources), donc invalidées et
+            // rechargées avant de relancer la consultation EDT+RBS.
+            $scope.changeAvailabilityStructure = async function (): Promise<void> {
+                $scope.availability.resources = [];
+                $scope.availability.typeNames = [];
+                $scope.availability.selectedResource = 'ALL';
+                await loadAvailabilityResources($scope.availability.selectedStructureId);
+                await $scope.loadAvailability();
+            };
+
+            const loadAvailabilityResources = async (structureId: string): Promise<void> => {
+                try {
+                    const resources = await availabilityService.fetchResources(structureId);
+                    resources.sort((a: any, b: any) => a.name.localeCompare(b.name));
+                    $scope.availability.resources = resources;
+                    $scope.availability.typeNames = Array.from(
+                        new Set(resources.map((r: any) => r.typeName))
+                    ).sort((a: string, b: string) => a.localeCompare(b));
+                } catch (e) {
+                    $scope.availability.resources = [];
+                    $scope.availability.typeNames = [];
+                }
+                safeApply($scope);
+            };
+
+            $scope.showAvailability = async function (): Promise<void> {
+                const structureId = getAvailabilityStructureId();
+                if (!structureId) {
+                    return;
+                }
+                $scope.display.showAvailabilityPanel = true;
+                if ($scope.availability.resources.length === 0) {
+                    await loadAvailabilityResources(structureId);
+                }
+                await $scope.loadAvailability();
+            };
+
+            $scope.loadAvailability = async function (): Promise<void> {
+                const structureId = getAvailabilityStructureId();
+                if (!structureId) {
+                    return;
+                }
+                $scope.availability.loading = true;
+                $scope.availability.slots = [];
+
+                const rangeStart = $scope.availability.mode === 'day'
+                    ? moment($scope.availability.pickedDate).startOf('day')
+                    : $scope.availability.weekStart.clone();
+                const rangeEnd = $scope.availability.mode === 'day'
+                    ? rangeStart.clone().add(1, 'day')
+                    : rangeStart.clone().add(7, 'days');
+                // Les deux endpoints consommés ici (courses, bookings/all) attendent une date
+                // sans heure — cf. commentaires dans availability.service.ts.
+                const startDateOnly = rangeStart.format('YYYY-MM-DD');
+                const endDateOnly = rangeEnd.format('YYYY-MM-DD');
+
+                const resourceById: { [id: number]: any } = {};
+                $scope.availability.resources.forEach((r: any) => { resourceById[r.id] = r; });
+                const roomNameToResource: { [name: string]: any } = {};
+                $scope.availability.resources.forEach((r: any) => { roomNameToResource[r.name.trim().toLowerCase()] = r; });
+
+                const slots: any[] = [];
+
+                try {
+                    const courses = await availabilityService.fetchCourses(
+                        structureId, startDateOnly, endDateOnly
+                    );
+                    (courses || []).forEach((course: any) => {
+                        (course.roomLabels || []).forEach((roomLabel: string) => {
+                            // Correspondance par NOM (comme RBS checkEdtRoomConflict) : une salle
+                            // EDT sans ressource RBS du même nom n'apparaît simplement pas ici,
+                            // jamais bloquant.
+                            const resource = roomNameToResource[String(roomLabel).trim().toLowerCase()];
+                            if (!resource) { return; }
+                            slots.push({
+                                source: 'edt',
+                                start: moment(course.startDate, 'YYYY-MM-DD HH:mm:ss'),
+                                end: moment(course.endDate, 'YYYY-MM-DD HH:mm:ss'),
+                                label: lang.translate('calendar.availability.source.edt'),
+                                resourceName: resource.name,
+                                resourceId: resource.id,
+                            });
+                        });
+                    });
+                } catch (e) {
+                    // Avertissement non bloquant : un souci de lecture EDT ne doit jamais
+                    // empêcher l'affichage des réservations RBS (même logique que RBS).
+                }
+
+                try {
+                    const bookings = await availabilityService.fetchAllBookings(startDateOnly, endDateOnly);
+                    (bookings || []).forEach((booking: any) => {
+                        if (booking.status === 3 /* REFUSED */) { return; }
+                        const resource = resourceById[booking.resource_id];
+                        if (!resource) { return; }
+                        slots.push({
+                            source: 'rbs',
+                            start: moment(booking.start_date),
+                            end: moment(booking.end_date),
+                            label: booking.booking_reason || lang.translate('calendar.availability.source.rbs'),
+                            resourceName: resource.name,
+                            resourceId: resource.id,
+                        });
+                    });
+                } catch (e) {
+                    // idem : ne jamais bloquer l'écran sur un souci de lecture RBS.
+                }
+
+                const filtered = $scope.availability.selectedResource === 'ALL'
+                    ? slots
+                    : slots.filter((s: any) => s.resourceId === $scope.availability.selectedResource.id);
+                filtered.sort((a: any, b: any) => a.start.valueOf() - b.start.valueOf());
+
+                $scope.availability.slots = filtered;
+                $scope.availability.loading = false;
+                safeApply($scope);
+            };
+
+            $scope.changeAvailabilityWeek = function (offsetWeeks: number): void {
+                $scope.availability.mode = 'week';
+                $scope.availability.weekStart = $scope.availability.weekStart.clone().add(offsetWeeks, 'weeks');
+                $scope.availability.pickedDate = $scope.availability.weekStart.clone().toDate();
+                $scope.loadAvailability();
+            };
+
+            // Choix direct d'une date : bascule en vue "ce jour" (pas la semaine entière), plus
+            // pertinent pour vérifier une disponibilité ponctuelle qu'une navigation par semaine.
+            $scope.pickAvailabilityDate = function (): void {
+                $scope.availability.mode = 'day';
+                $scope.loadAvailability();
             };
         }]);

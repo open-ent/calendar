@@ -1,0 +1,352 @@
+name: Build & Publish Fat Mod
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+      - dev
+      - '*-patched'
+      - '*-patched-dev'
+    tags: ['*']
+  pull_request:
+    branches: [main, master, develop, dev]
+  workflow_dispatch:
+    inputs:
+      entcore_version:
+        description: 'Version entcore (ex: 6.16.14-patched). Laissez vide pour utiliser la version du pom.xml.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  frontend:
+    name: Build Frontend (pnpm/Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - uses: pnpm/action-setup@v6
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Generate server-rendered view templates
+        run: |
+          # Reproduit l'etape buildFrontend de build.sh : copie view-src -> view
+          # en substituant @@VERSION (cache-busting). Sans cela le jar ne contient
+          # que view-src/ (source non traitee) -> 500 sur GET /calendar.
+          mkdir -p src/main/resources/view
+          VERSION=$(node -e "process.stdout.write(String(Date.now()))")
+          find src/main/resources/view-src -type f \( -name "*.html" -o -name "*.json" \) | while read -r file; do
+            dest="src/main/resources/view/${file#src/main/resources/view-src/}"
+            mkdir -p "$(dirname "$dest")"
+            sed "s/@@VERSION/$VERSION/g" "$file" > "$dest"
+          done
+
+      - name: Build frontend (JS bundles)
+        run: pnpm build
+
+      - name: Build stylesheet
+        run: pnpm build:sass
+
+      # IHM React de la vue calendar-react.html (/calendar/public/index.js) : sous-projet Vite
+      # frontend/, distinct du bundle racine application.js. Utilise des paquets prives @open-ent
+      # -> auth via OPENENT_PACKAGES_TOKEN (frontend/.npmrc : //npm.pkg.github.com/:_authToken).
+      # Sans cette etape, le fat-mod ne contient pas index.js et ?ui=react est casse (bundle 404).
+      - name: Build frontend React (sous-projet Vite frontend/)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.OPENENT_PACKAGES_TOKEN }}
+        run: |
+          cd frontend
+          # Les @open-ent/* sont publiés sur un tag MOBILE (2.5.30-patched) : le lock
+          # fige une URL de tarball contenant le SHA du blob d'alors, que GitHub
+          # Packages rejette en 409 après republication. On re-résout ces paquets.
+          node scripts/refresh-open-ent-lock.mjs
+          pnpm install --no-frozen-lockfile
+          pnpm build
+          mkdir -p ../src/main/resources/public
+          cp -r dist/public/. ../src/main/resources/public/
+
+      - name: Verify build outputs
+        run: |
+          test -f src/main/resources/view/calendar.html        || { echo "::error::view/calendar.html missing"; exit 1; }
+          # Vue React servie par CalendarController quand ui=react (defaut) : sans elle
+          # renderView echoue -> 500 sur GET /calendar alors que le bundle index.js est bien
+          # present. Le fat-mod n'est « dual » que si les DEUX vues sont dans le jar.
+          test -f src/main/resources/view/calendar-react.html  || { echo "::error::view/calendar-react.html missing"; exit 1; }
+          test -f src/main/resources/public/dist/application.js || { echo "::error::public/dist/application.js missing"; exit 1; }
+          test -f src/main/resources/public/js/behaviours.js    || { echo "::error::public/js/behaviours.js missing"; exit 1; }
+          test -f src/main/resources/public/css/calendar.css    || { echo "::error::public/css/calendar.css missing"; exit 1; }
+          test -f src/main/resources/public/index.js            || { echo "::error::public/index.js (React frontend/) missing"; exit 1; }
+
+      - name: Upload frontend assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-assets
+          path: src/main/resources/
+          retention-days: 1
+
+  backend:
+    name: Build & Publish Fat Mod
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Configure Maven pour GitHub Packages
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << EOF
+          <settings>
+            <servers>
+              <server>
+                <id>github</id>
+                <username>$GITHUB_ACTOR</username>
+                <password>$GITHUB_TOKEN</password>
+              </server>
+              <server>
+                <id>pt-releases</id>
+                <username>$NEXUS_USER</username>
+                <password>$NEXUS_PASSWORD</password>
+              </server>
+            </servers>
+            <profiles>
+              <profile>
+                <id>github-packages</id>
+                <repositories>
+                  <repository>
+                    <id>github</id>
+                    <name>GitHub open-ent Packages</name>
+                    <url>https://maven.pkg.github.com/open-ent/entcore-v2</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                  </repository>
+                </repositories>
+              </profile>
+            </profiles>
+            <activeProfiles>
+              <activeProfile>github-packages</activeProfile>
+            </activeProfiles>
+          </settings>
+          EOF
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          NEXUS_USER: ${{ secrets.NEXUS_USER }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+
+      - name: Download frontend assets
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-assets
+          path: src/main/resources/
+
+      - name: Build fat JAR
+        run: |
+          # Verrou entcore patché. Un build déclenché par push n'a pas l'input `entcore_version` :
+          # sans défaut, le pom décidait seul et pouvait retomber sur l'entcore UPSTREAM alors que
+          # la plateforme tourne org.entcore~*~<version>-patched. Ce mélange de versions casse le
+          # rendu des vues EN SILENCE (500 à corps vide, API 200 — constaté sur forum le 2026-08-10).
+          # On résout donc la version effective et on échoue si elle n'est pas « -patched ».
+          # Aucune version en dur ici : la source de vérité reste le pom du fork.
+          ENTCORE_EFF="${ENTCORE_VERSION:-$(mvn help:evaluate -Dexpression=entCoreVersion -q -DforceStdout)}"
+          case "$ENTCORE_EFF" in
+            *-patched) echo "entcore verrouillé sur $ENTCORE_EFF" ;;
+            *) echo "::error::entcore « $ENTCORE_EFF » n'est pas une version -patched — la plateforme tourne org.entcore~*~-patched. Corriger entCoreVersion dans le pom, ou passer l'input entcore_version."; exit 1 ;;
+          esac
+          # Branche et commit écrits dans le MANIFEST (SCM-Branch / SCM-Commit-Id), lus par la
+          # page « Modules & versions » du dashboard. Sans ces propriétés, la détection par git
+          # échoue dès que le HEAD est détaché — cas d'un déclenchement manuel ou d'un tag — et
+          # le MANIFEST part avec SCM-Branch: UNKNOWN (constaté sur le jar 4.2.7-patched publié
+          # le 2026-07-24). Les variables GitHub, elles, sont toujours justes.
+          mvn clean package -Dmaven.test.skip=true -B -DentCoreVersion="$ENTCORE_EFF" \
+            -DbuildNumber="${GITHUB_SHA::8}" -DscmBranch="${GITHUB_REF_NAME}"
+        env:
+          ENTCORE_VERSION: ${{ github.event.inputs.entcore_version }}
+
+      - name: Run tests
+        if: github.event_name == 'pull_request'
+        run: mvn test -B
+
+      - name: Configure Maven for GitHub Packages
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          mkdir -p ~/.m2
+          # ⚠️ Settings COMPLET : garder le repository GitHub Packages (open-ent/entcore-v2), sinon
+          # `mvn help:evaluate` du step publish ne peut pas résoudre le parent app-parent -> BUILD FAILURE
+          # -> `bash -e` tue le script AVANT le `ls` (faux « Fat JAR not found »). CCTP 51C — CI publish.
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                        https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>github</id>
+                <username>${env.GITHUB_ACTOR}</username>
+                <password>${env.GITHUB_TOKEN}</password>
+              </server>
+              <server>
+                <id>pt-releases</id>
+                <username>${{ secrets.NEXUS_USER }}</username>
+                <password>${{ secrets.NEXUS_PASSWORD }}</password>
+              </server>
+            </servers>
+            <profiles>
+              <profile>
+                <id>github-packages</id>
+                <repositories>
+                  <repository>
+                    <id>github</id>
+                    <name>GitHub open-ent Packages</name>
+                    <url>https://maven.pkg.github.com/open-ent/entcore-v2</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                  </repository>
+                </repositories>
+              </profile>
+            </profiles>
+            <activeProfiles>
+              <activeProfile>github-packages</activeProfile>
+            </activeProfiles>
+          </settings>
+          EOF
+
+      - name: Publish fat JAR to GitHub Packages
+        # 409 Conflict si la version -patched existe déjà (GitHub Packages refuse d'écraser une
+        # release ; le GITHUB_TOKEN d'Actions n'a pas le scope delete:packages). Republier la même
+        # version = no-op souhaité → on tolère l'échec du step au lieu de rougir tout le run.
+        continue-on-error: true
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          FAT_JAR=$(ls target/*-fat.jar 2>/dev/null | head -1)
+          if [ -z "${FAT_JAR}" ]; then echo "::error::Fat JAR not found"; exit 1; fi
+          mvn deploy:deploy-file \
+            -Dfile="${FAT_JAR}" \
+            -DgroupId="${GROUP_ID}" \
+            -DartifactId="${ARTIFACT_ID}" \
+            -Dversion="${VERSION}" \
+            -Dclassifier=fat \
+            -Dpackaging=jar \
+            -DrepositoryId=github \
+            -Durl="https://maven.pkg.github.com/${{ github.repository }}" \
+            -B
+
+      # Publication rct-nexus RÉACTIVÉE : depuis [B], la CI construit le bundle React (frontend/
+      # Vite) dans le fat-mod -> le jar est COMPLET (Angular + React). Republier sur maven-releases
+      # ne cause donc plus de regression ?ui=react (le jar contient index.js). La CI redevient le
+      # publieur nexus (delete-then-deploy pour la même version -patched).
+      - name: Configure Maven for rct-nexus
+        if: startsWith(github.ref, 'refs/tags/') || endsWith(github.ref, '-patched') || endsWith(github.ref, '-patched-dev')
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                        https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>github</id>
+                <username>${env.GITHUB_ACTOR}</username>
+                <password>${env.GITHUB_TOKEN}</password>
+              </server>
+              <server>
+                <id>pt-releases</id>
+                <username>${env.NEXUS_USER}</username>
+                <password>${env.NEXUS_PASSWORD}</password>
+              </server>
+            </servers>
+            <profiles>
+              <profile>
+                <id>github-packages</id>
+                <repositories>
+                  <repository>
+                    <id>github</id>
+                    <name>GitHub open-ent Packages</name>
+                    <url>https://maven.pkg.github.com/open-ent/entcore-v2</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                  </repository>
+                </repositories>
+              </profile>
+            </profiles>
+            <activeProfiles>
+              <activeProfile>github-packages</activeProfile>
+            </activeProfiles>
+          </settings>
+          EOF
+
+      - name: Publish fat JAR to rct-nexus
+        if: startsWith(github.ref, 'refs/tags/') || endsWith(github.ref, '-patched') || endsWith(github.ref, '-patched-dev')
+        env:
+          NEXUS_USER: ${{ secrets.NEXUS_USER }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          FAT_JAR=$(ls target/*-fat.jar 2>/dev/null | head -1)
+          if [ -z "${FAT_JAR}" ]; then echo "::error::Fat JAR not found"; exit 1; fi
+          NEXUS="https://rct-nexus.tech.fr"
+          echo "Recherche d'un composant existant ${GROUP_ID}:${ARTIFACT_ID}:${VERSION} sur maven-releases…"
+          IDS=$(curl -sf -u "${NEXUS_USER}:${NEXUS_PASSWORD}" \
+            "${NEXUS}/service/rest/v1/search?repository=maven-releases&maven.groupId=${GROUP_ID}&maven.artifactId=${ARTIFACT_ID}&version=${VERSION}" \
+            | jq -r '.items[].id' || true)
+          for id in ${IDS}; do
+            echo "Suppression du composant existant ${id}"
+            curl -sf -u "${NEXUS_USER}:${NEXUS_PASSWORD}" -X DELETE "${NEXUS}/service/rest/v1/components/${id}" || true
+          done
+          mvn deploy:deploy-file \
+            -Dfile="${FAT_JAR}" \
+            -DgroupId="${GROUP_ID}" \
+            -DartifactId="${ARTIFACT_ID}" \
+            -Dversion="${VERSION}" \
+            -Dclassifier=fat \
+            -Dpackaging=jar \
+            -DrepositoryId=pt-releases \
+            -Durl="${NEXUS}/repository/maven-releases/" \
+            -B
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: target/*-fat.jar
+          generate_release_notes: true

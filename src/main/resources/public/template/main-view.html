@@ -45,7 +45,7 @@
 <section class="toggle-buttons" ng-class="{ hide: !display.showToggleButtons }">
     <div class="toggle">
         <div class="row">
-            <behaviour name="manage" resource="showButtonsCalendar">
+            <authorize name="manage" resource="showButtonsCalendar">
                     <a href="/calendar/[[showButtonsCalendar._id]]/ical" ng-if="!showButtonsCalendar.isExternal">
                         <button>
                             <i18n>calendar.export</i18n>
@@ -60,16 +60,52 @@
                             ng-click="shareCalendar(showButtonsCalendar, $event)">
                         <i18n>share</i18n>
                     </button>
-            </behaviour>
+                    <button ng-if="showButtonsCalendar.type === 'structure'"
+                            ng-click="openPortalPublish(showButtonsCalendar, $event)">
+                        <i18n>calendar.portalpublish.title</i18n>
+                    </button>
+            </authorize>
         </div>
     </div>
 </section>
+
+<!-- Lightbox : Publish calendar on public portal -->
+<div ng-if="display.showPanelPortalPublish">
+    <lightbox show="display.showPanelPortalPublish" on-close="closePortalPublish();">
+        <div class="row">
+            <h2 class="subtitle"><i18n>calendar.portalpublish.title</i18n></h2>
+            <div class="row" ng-if="!calendar.portalPublished">
+                <p><i18n>calendar.portalpublish.url.help</i18n></p>
+            </div>
+            <div class="row" ng-if="calendar.portalPublished">
+                <p>✓ <i18n>calendar.portalpublish.published</i18n></p>
+                <div class="row">
+                    <input type="text" readonly class="twelve" ng-value="calendar.portalPublicUrl" onclick="this.select()"
+                           id="portalPublishUrlField"/>
+                    <button type="button" ng-click="document.execCommand('copy')"
+                            ng-mousedown="document.getElementById('portalPublishUrlField').select()">
+                        <i18n>copy</i18n>
+                    </button>
+                </div>
+            </div>
+            <div class="lightbox-buttons fluid">
+                <button type="button" class="right-magnet" ng-if="!calendar.portalPublished" ng-click="togglePortalPublish()">
+                    <i18n>calendar.portalpublish.title</i18n>
+                </button>
+                <button type="button" class="right-magnet" ng-if="calendar.portalPublished" ng-click="togglePortalPublish()">
+                    <i18n>calendar.portalpublish.unpublish</i18n>
+                </button>
+                <button type="button" class="cancel right-magnet" ng-click="closePortalPublish()"><i18n>cancel</i18n></button>
+            </div>
+        </div>
+    </lightbox>
+</div>
 
 <!-- Action buttons for calendar events -->
 <section class="toggle-buttons" ng-class="{ hide: calendarEvents.selected.length === 0 || !display.list}">
     <div class="toggle">
         <div class="row">
-            <behaviour name="manage" resource="calendarEvents.selected" class="cell">
+            <authorize name="manage" resource="calendarEvents.selected" class="cell">
                 <button ng-if="calendarEvents.selected.length === 1" ng-click="viewCalendarEvent(calendarEvents.selected[0])"><i18n>edit</i18n></button>
                 <button ng-click="confirmRemoveCalendarEvents($event)"><i18n>remove</i18n></button>
                 <button ng-if="calendarEvents.selected.length === 1 && calendarEvents.selected[0].parentId &&
@@ -78,7 +114,7 @@
                 <button ng-if="calendarEvents.selected.length === 1 && !calendarEvents.selected[0].parentId"
                         ng-click="shareEvent(calendarEvents.selected[0], $event)">
                     [[nameOfShareButton(calendarEvents.selected[0], "list")]]</button>
-            </behaviour>
+            </authorize>
         </div>
     </div>
 </section>
@@ -87,6 +123,28 @@
 <div ng-if="display.showPanelCalendar">
     <lightbox show="display.showPanelCalendar" on-close="display.showPanelCalendar = false;">
         <share-panel app-prefix="'calendar'" resources="calendar" auto-close="true" on-submit="updateCalendars()"></share-panel>
+
+        <!-- Point C (chantier "vue consolidée EDT+RBS") : droit de partage granulaire "associer
+             une réservation" — hors du composant share-panel générique du socle (limité à 5
+             rôles de partage figés, cf. mémoire openent-shareroles-5-roles-figes), donc affiché
+             en complément, sous le panneau générique. -->
+        <div class="row top-spacing" ng-if="bookingRights.collaborators.length > 0">
+            <p><i18n>calendar.booking.right.hint</i18n></p>
+            <table class="cell twelve">
+                <tbody>
+                    <tr ng-repeat="collaborator in bookingRights.collaborators">
+                        <td>[[collaborator.displayName]]</td>
+                        <td>
+                            <label class="checkbox">
+                                <input type="checkbox" ng-checked="collaborator.hasBookingRight"
+                                    ng-click="toggleBookingRight(collaborator)" />
+                                <span></span>
+                            </label>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </lightbox>
 </div>
 
@@ -162,6 +220,13 @@
                 </tr>
             </tbody>
         </table>
+    </lightbox>
+</div>
+
+<!-- Lightbox : Disponibilité EDT + RBS (partie 5, vue consolidée EDT+RBS) -->
+<div ng-if="display.showAvailabilityPanel">
+    <lightbox show="display.showAvailabilityPanel" on-close="display.showAvailabilityPanel = false;">
+        <div ng-include="'/calendar/public/template/availability/availability.html'"></div>
     </lightbox>
 </div>
 

@@ -21,14 +21,28 @@ export class Calendar implements Selectable, Shareable {
     icsLink: string;
     platform: string;
     updated: string;
+    // type d'agenda : 'personal' (défaut) | 'structure' (établissement) | 'group' (groupe)
+    type: string;
+    structureId: string;
+    // Nom de l'établissement (résolu côté backend, cf. CalendarController#enrichStructureNames) —
+    // affiché dans l'intitulé d'un agenda de structure pour le distinguer d'un établissement
+    // partagé par quelqu'un d'un AUTRE établissement (cf. side-bar.ts#getCalendarTitle).
+    structureName: string;
+    groupId: string;
+    // Publication sur le portail public (flux ICS anonyme) — réservé aux agendas de type 'structure'.
+    portalPublished: boolean;
 
     constructor(calendar?) {
         this.calendarEvents = new CalendarEvents(this);
         this.myRights = new Rights(this);
         this.selected = false;
         if (!_.isEmpty(calendar)) {
-            this.myRights.fromBehaviours();
             Mix.extend(this, Behaviours.applicationsBehaviours.calendar.resourceRights(calendar));
+            this.type = calendar.type;
+            this.structureId = calendar.structureId;
+            this.structureName = calendar.structureName;
+            this.groupId = calendar.groupId;
+            this.portalPublished = calendar.portalPublished === true;
             // calendar.updated['$date'] is a number (timestamp)
             if (calendar.updated && calendar.updated['$date']) {
                 this.updated = DateUtils.getFormattedDate(calendar.updated['$date'], FORMAT.formattedISODate);
@@ -45,7 +59,14 @@ export class Calendar implements Selectable, Shareable {
     };
 
     async create() {
-        let {data} = await http.post('/calendar/calendars', this);
+        // Route vers l'endpoint gaté par le droit workflow correspondant au type d'agenda.
+        let url: string = '/calendar/calendars';
+        if (this.type === 'structure') {
+            url = '/calendar/calendars/structure';
+        } else if (this.type === 'group') {
+            url = '/calendar/calendars/group';
+        }
+        let {data} = await http.post(url, this);
         this._id = data._id;
     };
 
@@ -57,11 +78,30 @@ export class Calendar implements Selectable, Shareable {
         await http.delete('/calendar/' + this._id);
     };
 
+    /** URL publique (anonyme) du flux ICS — valide uniquement une fois {@link portalPublished} à true. */
+    get portalPublicUrl(): string {
+        return window.location.origin + '/calendar/pub/' + this._id + '/events.ics';
+    }
+
+    async portalPublish() {
+        await http.put('/calendar/' + this._id + '/portal-publish');
+        this.portalPublished = true;
+    }
+
+    async portalUnpublish() {
+        await http.delete('/calendar/' + this._id + '/portal-publish');
+        this.portalPublished = false;
+    }
+
     toJSON() {
-        return {
+        const json: any = {
             title: this.title,
             color: this.color,
-        }
+        };
+        if (this.type) { json.type = this.type; }
+        if (this.structureId) { json.structureId = this.structureId; }
+        if (this.groupId) { json.groupId = this.groupId; }
+        return json;
     };
 
     async importIcal(icalToInput) {

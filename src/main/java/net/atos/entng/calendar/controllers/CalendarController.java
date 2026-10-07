@@ -23,6 +23,7 @@ import fr.wseduc.bus.BusAddress;
 import fr.wseduc.rs.*;
 import fr.wseduc.security.ActionType;
 import fr.wseduc.security.SecuredAction;
+import fr.wseduc.webutils.Either;
 import fr.wseduc.webutils.I18n;
 import fr.wseduc.webutils.http.Renders;
 import fr.wseduc.webutils.request.RequestUtils;
@@ -33,6 +34,7 @@ import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import net.atos.entng.calendar.core.constants.Actions;
 import net.atos.entng.calendar.core.constants.Field;
@@ -43,10 +45,13 @@ import net.atos.entng.calendar.helpers.CalendarHelper;
 import net.atos.entng.calendar.helpers.EventBusHelper;
 import net.atos.entng.calendar.helpers.PlatformHelper;
 import net.atos.entng.calendar.models.CalendarModel;
+import net.atos.entng.calendar.security.AdminOfCalendarStructure;
 import net.atos.entng.calendar.security.ShareEventConf;
+import net.atos.entng.calendar.models.User;
 import net.atos.entng.calendar.services.CalendarService;
 import net.atos.entng.calendar.services.EventServiceMongo;
 import net.atos.entng.calendar.services.ServiceFactory;
+import net.atos.entng.calendar.services.UserService;
 import net.atos.entng.calendar.services.impl.EventServiceMongoImpl;
 import net.atos.entng.calendar.utils.DateUtils;
 import org.entcore.common.events.EventHelper;
@@ -57,11 +62,18 @@ import org.entcore.common.http.filter.SuperAdminFilter;
 import org.entcore.common.http.filter.Trace;
 import org.entcore.common.mongodb.MongoDbConf;
 import org.entcore.common.mongodb.MongoDbControllerHelper;
+import org.entcore.common.neo4j.Neo4j;
+import org.entcore.common.service.VisibilityFilter;
 import org.entcore.common.user.UserInfos;
 import org.entcore.common.user.UserUtils;
 import org.vertx.java.core.http.RouteMatcher;
 
 import java.util.*;
+import java.util.stream.Collectors;
+
+import static org.entcore.common.http.response.DefaultResponseHandler.arrayResponseHandler;
+import static org.entcore.common.neo4j.Neo4jResult.validResultsHandler;
+import static org.entcore.common.neo4j.Neo4jResult.validUniqueResultHandler;
 
 public class CalendarController extends MongoDbControllerHelper {
     static final String RESOURCE_NAME = "agenda";
@@ -72,11 +84,22 @@ public class CalendarController extends MongoDbControllerHelper {
     private final CalendarHelper calendarHelper;
     private final PlatformHelper platformHelper;
     private final EventServiceMongo eventServiceMongo;
+    private final UserService userService;
+    private final Neo4j neo4j = Neo4j.getInstance();
+
+    /** IHM par défaut : "react" (nouvelle) ou "angular" (ancienne), pilotée par la conf `frontend-ui`
+     *  (bloc du module dans ent-core.yaml, alimentée par FRONTEND_UI_DEFAULT).
+     *  Défaut "react" : la migration React (CCTP 51C) a la parité (agenda jour/semaine/mois,
+     *  calendriers + événements CRUD, partage calendrier + événement).
+     *  NB : launcher-next conserve la clé `frontend-ui` (bloc `config:` stocké verbatim) ; le fallback
+     *  Java "react" ne s'applique que si la conf est absente. Override par `?ui=react|angular`. */
+    private String frontendUi = "react";
 
     @Override
     public void init(Vertx vertx, JsonObject config, RouteMatcher rm,
                      Map<String, fr.wseduc.webutils.security.SecuredAction> securedActions) {
         super.init(vertx, config, rm, securedActions);
+        this.frontendUi = "angular".equals(config.getString("frontend-ui", "react")) ? "angular" : "react";
     }
 
     public CalendarController(String collection, ServiceFactory serviceFactory, EventBus eb, JsonObject config) {
@@ -87,6 +110,7 @@ public class CalendarController extends MongoDbControllerHelper {
         this.calendarHelper = new CalendarHelper(collection, serviceFactory, eb, config);
         this.platformHelper = new PlatformHelper(serviceFactory);
         this.eventServiceMongo = new EventServiceMongoImpl(Field.CALENDAREVENT, eb, serviceFactory);
+        this.userService = serviceFactory.userService();
     }
 
     @Get("/config")
@@ -101,6 +125,12 @@ public class CalendarController extends MongoDbControllerHelper {
     public void view(HttpServerRequest request) {
         String host = getHost(request);
         String lang = I18n.acceptLanguage(request);
+        // Choix de l'IHM (CCTP 51C — migration React) : défaut piloté par la conf `frontend-ui`
+        // (react|angular, défaut angular), override par requête `?ui=react|angular`.
+        // calendar.html = IHM AngularJS existante (défaut) ; calendar-react.html = nouvelle IHM React.
+        final String uiParam = request.getParam("ui");
+        final String ui = ("react".equals(uiParam) || "angular".equals(uiParam)) ? uiParam : frontendUi;
+        final String view = "react".equals(ui) ? "calendar-react.html" : "calendar.html";
         UserUtils.getUserInfos(eb, request, user -> {
             if (user != null) {
                 final JsonObject context = new JsonObject();
@@ -111,10 +141,10 @@ public class CalendarController extends MongoDbControllerHelper {
                         .onSuccess(calendar -> {
                             if (calendar.isEmpty() || calendar.fieldNames().isEmpty()) {
                                 calendarService.createDefaultCalendar(user, host, lang)
-                                        .onSuccess(res -> renderView(request, context))
+                                        .onSuccess(res -> renderView(request, context, view, null))
                                         .onFailure(err -> renderError(request));
                             } else {
-                                renderView(request, context);
+                                renderView(request, context, view, null);
                             }
                             // Create event "access to application Calendar" and store it, for module "statistics"
                             eventHelper.onAccess(request);
@@ -124,10 +154,90 @@ public class CalendarController extends MongoDbControllerHelper {
         });
     }
 
+    /**
+     * Retour utilisateur (chantier "vue consolidée EDT+RBS") : le titre générique "Agenda
+     * d'établissement" est identique pour tous — sans le nom de l'établissement affiché dans
+     * l'intitulé lui-même, impossible de distinguer visuellement SON PROPRE établissement d'un
+     * établissement partagé par quelqu'un d'un AUTRE établissement (cas cross-établissement du
+     * point B2). Reproduit ici le corps de {@code ControllerHelper#list(HttpServerRequest)}
+     * (mêmes VisibilityFilter/crudService) en insérant une résolution Neo4j du nom
+     * d'établissement (structureName) pour chaque agenda de type "structure" avant le rendu —
+     * en un seul aller-retour Neo4j (ids distincts), jamais bloquant pour la liste elle-même en
+     * cas d'échec (meilleur effort, comme le reste des enrichissements de ce module).
+     */
     @Get("/calendars")
     @SecuredAction("calendar.view")
-    public void listCalendars(HttpServerRequest request) {
-        list(request);
+    public void listCalendars(final HttpServerRequest request) {
+        UserUtils.getUserInfos(eb, request, user -> {
+            String filter = request.params().get("filter");
+            VisibilityFilter v = VisibilityFilter.ALL;
+            if (filter != null) {
+                try {
+                    v = VisibilityFilter.valueOf(filter.toUpperCase());
+                } catch (IllegalArgumentException | NullPointerException e) {
+                    v = VisibilityFilter.ALL;
+                }
+            }
+            crudService.list(v, user, addNormalizedRights((Either<String, JsonArray> either) -> {
+                if (either.isRight()) {
+                    enrichStructureNames(either.right().getValue())
+                            .onComplete(ar -> arrayResponseHandler(request).handle(either));
+                } else {
+                    arrayResponseHandler(request).handle(either);
+                }
+            }));
+        });
+    }
+
+    /**
+     * Résout le nom de chaque établissement distinct présent parmi les agendas de type
+     * "structure", pour affichage direct dans l'intitulé côté side-bar (retour utilisateur :
+     * le titre générique "Agenda d'établissement" ne permettait pas de distinguer son propre
+     * établissement d'un établissement partagé par quelqu'un d'un AUTRE établissement).
+     * <p>
+     * Une requête PAR établissement distinct (motif {@code s.id = {id}} déjà éprouvé, cf.
+     * {@code DefaultGroupService#getInfos}) plutôt qu'un seul {@code WHERE s.id IN {ids}} :
+     * cette dernière forme, testée en direct (cypher-shell, HTTP brut) fonctionne bien contre
+     * Neo4j lui-même, mais renvoie systématiquement un résultat vide en passant par le client
+     * {@code Neo4j.execute(...)} de ce socle — anomalie non résolue (possible souci de
+     * sérialisation du paramètre liste par ce client précis), contournée ici plutôt
+     * qu'approfondie plus avant (nombre d'établissements distincts par utilisateur toujours
+     * très faible en pratique, un aller-retour par id reste négligeable).
+     */
+    private Future<Void> enrichStructureNames(JsonArray calendars) {
+        Set<String> structureIds = new HashSet<>();
+        for (Object o : calendars) {
+            JsonObject calendar = (JsonObject) o;
+            String structureId = calendar.getString(Field.STRUCTUREID);
+            if (Field.TYPE_STRUCTURE.equals(calendar.getString(Field.type)) && structureId != null) {
+                structureIds.add(structureId);
+            }
+        }
+        if (structureIds.isEmpty()) {
+            return Future.succeededFuture();
+        }
+        String query = "MATCH (s:Structure {id:{id}}) RETURN s.name as name";
+        List<Future<Void>> lookups = new ArrayList<>();
+        for (String structureId : structureIds) {
+            Promise<Void> lookup = Promise.promise();
+            lookups.add(lookup.future());
+            JsonObject params = new JsonObject().put("id", structureId);
+            neo4j.execute(query, params, validUniqueResultHandler(res -> {
+                if (res.isRight() && res.right().getValue() != null) {
+                    String name = res.right().getValue().getString("name");
+                    if (name != null) {
+                        for (Object o : calendars) {
+                            JsonObject calendar = (JsonObject) o;
+                            if (structureId.equals(calendar.getString(Field.STRUCTUREID))) {
+                                calendar.put("structureName", name);
+                            }
+                        }
+                    }
+                }
+                lookup.complete();
+            }));
+        }
+        return Future.join(lookups).map((Void) null);
     }
 
     @Get("/calendars/:id")
@@ -177,6 +287,43 @@ public class CalendarController extends MongoDbControllerHelper {
         });
     }
 
+    /**
+     * Création d'un agenda d'établissement. Droit workflow dédié « calendar.structure » (par défaut
+     * aux chefs d'établissement, attribuable aux admins locaux via la console). Le corps porte
+     * type="structure" + structureId ; le partage aux membres de la structure se fait via l'endpoint
+     * de partage existant (PUT /calendar/share/json/:id), réutilisable par n'importe quelle IHM.
+     */
+    @Post("/calendars/structure")
+    @SecuredAction("calendar.structure")
+    @Trace(Actions.CREATE_CALENDAR)
+    public void createStructureCalendar(final HttpServerRequest request) {
+        RequestUtils.bodyToJson(request, pathPrefix + "calendar", object -> {
+            super.create(request, r -> {
+                if (r.succeeded()) {
+                    eventHelper.onCreateResource(request, RESOURCE_NAME);
+                }
+            });
+        });
+    }
+
+    /**
+     * Création d'un agenda de groupe. Droit workflow dédié « calendar.group » (par défaut chefs +
+     * admins + enseignants). Le corps porte type="group" + groupId ; le partage au groupe se fait
+     * via l'endpoint de partage existant, réutilisable par n'importe quelle IHM.
+     */
+    @Post("/calendars/group")
+    @SecuredAction("calendar.group")
+    @Trace(Actions.CREATE_CALENDAR)
+    public void createGroupCalendar(final HttpServerRequest request) {
+        RequestUtils.bodyToJson(request, pathPrefix + "calendar", object -> {
+            super.create(request, r -> {
+                if (r.succeeded()) {
+                    eventHelper.onCreateResource(request, RESOURCE_NAME);
+                }
+            });
+        });
+    }
+
     @Put("/:id")
     @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
     @Trace(Actions.UPDATE_CALENDAR)
@@ -186,6 +333,85 @@ public class CalendarController extends MongoDbControllerHelper {
             public void handle(JsonObject event) {
                 update(request);
             }
+        });
+    }
+
+    /**
+     * Point C (chantier "vue consolidée EDT+RBS") : droit de partage granulaire "associer une
+     * réservation RBS (salle/matériel mobile) à un événement" — distinct du droit de contribution
+     * général. Le socle ENT n'accepte que 5 rôles de partage figés (read/contrib/manager/publish/
+     * comment, cf. {@code org.entcore.common.share.ShareRoles}) : impossible d'ajouter un rôle
+     * personnalisé "booking" au panneau de partage générique. Stocké donc en dehors de ce
+     * mécanisme, comme un champ dédié {@code bookingRights} sur le document du calendrier (liste de
+     * {@code {userId}}/{@code {groupId}}), réservé au propriétaire/gestionnaire de l'agenda — le
+     * corps REMPLACE la liste complète (même patron que {@code shareCalendarSubmit}, pas un ajout
+     * incrémental). Lu par {@code EventHelper#resolveCalendarRights} pour le blocage/proposition
+     * d'une NOUVELLE réservation par un collaborateur non-propriétaire (cf. point B2).
+     */
+    /**
+     * Point C (suite) : liste les COLLABORATEURS individuels actuellement partagés sur cet agenda
+     * (extraits de {@code shared}, noms résolus via {@code userService.fetchUser}) avec leur droit
+     * de réservation actuel — alimente la case à cocher dédiée du panneau de partage (le composant
+     * générique `share-panel` du socle ne permet pas d'exposer ce champ personnalisé). Les groupes
+     * partagés (pas de nom individuel à résoudre simplement) ne sont pas listés ici — hors scope
+     * MVP, le droit de réservation via un GROUPE reste accordable par id brut sur l'endpoint PUT.
+     */
+    @Get("/:id/booking-rights")
+    @ApiDoc("Liste les collaborateurs partagés sur cet agenda avec leur droit de réservation actuel.")
+    @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
+    public void getBookingRights(final HttpServerRequest request) {
+        String calendarId = request.params().get("id");
+        UserUtils.getAuthenticatedUserInfos(eb, request).onSuccess(user -> {
+            calendarService.list(Collections.singletonList(calendarId)).onSuccess(res -> {
+                if (res == null || res.isEmpty()) {
+                    renderJson(request, new JsonArray());
+                    return;
+                }
+                JsonObject calendar = (JsonObject) res.getValue(0);
+                JsonArray shared = calendar.getJsonArray(Field.shared, new JsonArray());
+                JsonArray bookingRights = calendar.getJsonArray(Field.BOOKINGRIGHTS, new JsonArray());
+                Set<String> grantedUserIds = bookingRights.stream()
+                        .map(o -> (JsonObject) o)
+                        .map(o -> o.getString(Field.USERID))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                List<String> sharedUserIds = shared.stream()
+                        .map(o -> (JsonObject) o)
+                        .map(o -> o.getString(Field.USERID))
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .collect(Collectors.toList());
+                if (sharedUserIds.isEmpty()) {
+                    renderJson(request, new JsonArray());
+                    return;
+                }
+                userService.fetchUser(sharedUserIds, user, false).onSuccess(users -> {
+                    JsonArray result = new JsonArray();
+                    users.forEach(u -> result.add(new JsonObject()
+                            .put(Field.USERID, u.id())
+                            .put(Field.DISPLAYNAME, u.displayName())
+                            .put(Field.HASBOOKINGRIGHT, grantedUserIds.contains(u.id()))));
+                    renderJson(request, result);
+                }).onFailure(err -> renderError(request));
+            }).onFailure(err -> renderError(request));
+        });
+    }
+
+    @Put("/:id/booking-rights")
+    @ApiDoc("Définit la liste des utilisateurs/groupes autorisés à associer une réservation RBS sur cet agenda partagé.")
+    @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
+    public void updateBookingRights(final HttpServerRequest request) {
+        String calendarId = request.params().get("id");
+        RequestUtils.bodyToJson(request, body -> {
+            JsonArray bookingRights = new JsonArray();
+            body.getJsonArray("userIds", new JsonArray()).forEach(userId ->
+                    bookingRights.add(new JsonObject().put(Field.USERID, userId)));
+            body.getJsonArray("groupIds", new JsonArray()).forEach(groupId ->
+                    bookingRights.add(new JsonObject().put(Field.groupId, groupId)));
+
+            calendarService.update(calendarId, new JsonObject().put(Field.BOOKINGRIGHTS, bookingRights))
+                    .onSuccess(v -> renderJson(request, bookingRights))
+                    .onFailure(err -> renderError(request));
         });
     }
 
@@ -321,6 +547,43 @@ public class CalendarController extends MongoDbControllerHelper {
                             err.getMessage());
                     Renders.renderError(request);
                 });
+    }
+
+    /**
+     * Publie l'agenda d'établissement sur le portail public : ses événements deviennent
+     * accessibles sans authentification via le flux ICS anonyme {@code GET /pub/:id/events.ics}.
+     * Réservé à un ADML de la structure propriétaire de l'agenda (ou super-admin), cf.
+     * {@link AdminOfCalendarStructure}.
+     */
+    @Put("/:id/portal-publish")
+    @ApiDoc("Publish a structure calendar's events as a public ICS feed on the school's public portal.")
+    @ResourceFilter(AdminOfCalendarStructure.class)
+    @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
+    @Trace(Actions.PORTAL_PUBLISH_CALENDAR)
+    public void portalPublish(final HttpServerRequest request) {
+        final String id = request.params().get(Field.ID);
+        UserUtils.getUserInfos(eb, request, user -> {
+            if (user == null) {
+                unauthorized(request);
+                return;
+            }
+            calendarService.setPortalPublication(id, true, user.getUserId())
+                    .onSuccess(res -> Renders.ok(request))
+                    .onFailure(err -> renderError(request));
+        });
+    }
+
+    /** Dépublie l'agenda d'établissement du portail public. Même garde que {@link #portalPublish}. */
+    @Delete("/:id/portal-publish")
+    @ApiDoc("Unpublish a structure calendar from the public portal.")
+    @ResourceFilter(AdminOfCalendarStructure.class)
+    @SecuredAction(value = "calendar.manager", type = ActionType.RESOURCE)
+    @Trace(Actions.PORTAL_UNPUBLISH_CALENDAR)
+    public void portalUnpublish(final HttpServerRequest request) {
+        final String id = request.params().get(Field.ID);
+        calendarService.setPortalPublication(id, false, null)
+                .onSuccess(res -> Renders.ok(request))
+                .onFailure(err -> renderError(request));
     }
 
     @Get("/share/json/:id")
@@ -509,6 +772,53 @@ public class CalendarController extends MongoDbControllerHelper {
                             });
                 });
                 break;
+            case "create-event-from-booking": {
+                // Symétrique du pont RbsHelper (calendar -> RBS à la création d'un événement avec
+                // "réserver une ressource") : ici RBS notifie calendar qu'une réservation vient
+                // d'être validée, pour qu'elle apparaisse dans l'agenda d'établissement. Dégradation
+                // silencieuse si la structure n'a pas d'agenda de type "structure" — l'événement
+                // n'est simplement pas créé, la réservation RBS elle-même n'est jamais affectée
+                // (RBS ne dépend pas de la réponse : eb.send, pas eb.request).
+                JsonObject body = message.body();
+                String structureId = body.getString("structureId");
+                String bookingUserId = body.getString(Field.USERID);
+
+                UserUtils.getUserInfos(eb, bookingUserId, bookingUser -> {
+                    if (bookingUser == null) {
+                        log.error("[Calendar@CalendarController::calendarEventBusHandler]: case " +
+                                "'create-event-from-booking': unknown user " + bookingUserId);
+                        return;
+                    }
+                    calendarService.findStructureCalendar(structureId)
+                            .onSuccess(structureCalendar -> {
+                                // Format produit par RBS (Postgres to_char "DD/MM/YY HH24:MI", cf.
+                                // BookingServiceSqlImpl.DATE_FORMAT), pas un ISO standard.
+                                Date startDate = DateUtils.parseDate(body.getString("startDate"), "dd/MM/yy HH:mm");
+                                Date endDate = DateUtils.parseDate(body.getString("endDate"), "dd/MM/yy HH:mm");
+                                if (startDate == null || endDate == null) {
+                                    log.error("[Calendar@CalendarController::calendarEventBusHandler]: case " +
+                                            "'create-event-from-booking': invalid dates");
+                                    return;
+                                }
+                                JsonObject event = new JsonObject()
+                                        .put(Field.TITLE, body.getString("title"))
+                                        .put(Field.STARTMOMENT, DateUtils.dateToString(startDate))
+                                        .put(Field.ENDMOMENT, DateUtils.dateToString(endDate))
+                                        .put(Field.ALLDAY_LC, false)
+                                        .put(Field.isRecurrent, false);
+                                eventServiceMongo.create(structureCalendar.getString(Field._ID), event, bookingUser, createEvent -> {
+                                    if (createEvent.isLeft()) {
+                                        log.error("[Calendar@CalendarController::calendarEventBusHandler]: case " +
+                                                "'create-event-from-booking': failed to create event: " + createEvent.left().getValue());
+                                    }
+                                });
+                            })
+                            .onFailure(err -> log.info("[Calendar@CalendarController::calendarEventBusHandler]: case " +
+                                    "'create-event-from-booking': no structure calendar for structure " + structureId +
+                                    " (booking not mirrored, this is not an error)"));
+                });
+                break;
+            }
             default:
                 String errMessage = String.format("[Calendar@%s::calendarEventBusHandler]: " +
                                 "no action defined",

@@ -48,6 +48,8 @@ import net.atos.entng.calendar.Calendar;
 import net.atos.entng.calendar.core.constants.Actions;
 import net.atos.entng.calendar.core.constants.Field;
 import net.atos.entng.calendar.models.User;
+import net.atos.entng.calendar.core.enums.BookingProposalStatus;
+import net.atos.entng.calendar.services.BookingProposalService;
 import net.atos.entng.calendar.services.CalendarService;
 import net.atos.entng.calendar.services.EventServiceMongo;
 
@@ -85,6 +87,7 @@ public class EventHelper extends MongoDbControllerHelper {
 
     private final EventServiceMongo eventService;
     private final CalendarService calendarService;
+    private final BookingProposalService bookingProposalService;
     private final UserService userService;
 
     private final TimelineHelper notification;
@@ -99,6 +102,7 @@ public class EventHelper extends MongoDbControllerHelper {
         this.eventService = (EventServiceMongo) eventService;
         this.crudService = eventService;
         this.calendarService = serviceFactory.calendarService();
+        this.bookingProposalService = serviceFactory.bookingProposalService();
         this.userService = serviceFactory.userService();
         this.notification = timelineHelper;
         final EventStore eventStore = EventStoreFactory.getFactory().getEventStore(Calendar.class.getSimpleName());
@@ -149,14 +153,44 @@ public class EventHelper extends MongoDbControllerHelper {
                             .onSuccess(isExternal -> {
                                 if(Boolean.FALSE.equals(isExternal)) {
                                     if (isEventValid(object)) {
-                                        RbsHelper.saveBookingsInRbs(request, object, user, config, eb).onComplete(e -> {
+                                        // Point B2/C : si l'agenda visé n'appartient pas à l'auteur, toute
+                                        // NOUVELLE réservation RBS demandée passe par le droit de partage
+                                        // granulaire "calendar.booking" (cf. resolveCalendarRights) — sans
+                                        // ce droit, blocage total (400) ; avec, proposition à valider par
+                                        // le propriétaire (extractPendingBookingProposal).
+                                        JsonObject diff = RbsHelper.diffBookings(new JsonArray(), object.getJsonArray(Field.BOOKINGS, new JsonArray()));
+                                        if (!Boolean.TRUE.equals(config.getBoolean(Field.ENABLE_RBS))) {
+                                            diff.put(Field.TOCREATE, new JsonArray());
+                                        }
+                                        resolveCalendarRights(calendarId, user).compose(rights ->
+                                                extractPendingBookingProposal(diff, rights.getJsonObject(Field.OWNER, new JsonObject()),
+                                                        rights.getBoolean(Field.HASBOOKINGRIGHT, false), user)
+                                        ).compose(pendingProposal -> pendingProposal != null
+                                                ? Future.succeededFuture(pendingProposal)
+                                                : RbsHelper.saveBookingsInRbs(request, object, user, config, eb).map(v -> (JsonObject) null)
+                                        ).onComplete(e -> {
+                                                    if (e.failed() && BOOKING_RIGHT_DENIED.equals(e.cause().getMessage())) {
+                                                        Renders.badRequest(request, "calendar.booking.right.denied");
+                                                        return;
+                                                    }
                                                     if (object.containsKey(Field.REMINDERS)) {
                                                         remindersObject.set(object.getJsonObject(Field.REMINDERS));
                                                         object.remove(Field.REMINDERS);
                                                     }
+                                                    JsonObject pendingProposal = e.succeeded() ? e.result() : null;
+                                                    if (pendingProposal != null) {
+                                                        // La réservation part en proposition : l'événement est sauvegardé
+                                                        // sans elle (seules les réservations conservées, ici aucune en
+                                                        // création, restent — cf. diff.toKeep, toujours vide ici).
+                                                        object.remove(Field.BOOKINGS);
+                                                        object.remove(Field.HASBOOKING);
+                                                    }
                                                     eventService.create(calendarId, object, user, event -> {
                                                         if (event.isRight()) {
                                                             JsonObject eventId = event.right().getValue();
+                                                            if (pendingProposal != null) {
+                                                                createBookingProposal(request, calendarId, eventId.getString("_id"), user, pendingProposal);
+                                                            }
                                                             final JsonObject message = new JsonObject();
                                                             message.put(Field._ID, calendarId);
                                                             message.put(Field.EVENTID_CAMEL, eventId.getString("_id"));
@@ -205,6 +239,7 @@ public class EventHelper extends MongoDbControllerHelper {
                 final String eventId = request.params().get(EVENT_ID_PARAMETER);
                 final String calendarId = request.params().get(CALENDAR_ID_PARAMETER);
                 AtomicReference<JsonObject> remindersObject = new AtomicReference<>(new JsonObject());
+                AtomicReference<JsonObject> pendingProposalRef = new AtomicReference<>(null);
                 isExternalCalendarEventImmutable(eventId)
                         .onSuccess(isExternal -> {
                             if(Boolean.FALSE.equals(isExternal)) {
@@ -213,25 +248,79 @@ public class EventHelper extends MongoDbControllerHelper {
                                         remindersObject.set(object.getJsonObject(Field.REMINDERS));
                                         object.remove(Field.REMINDERS);
                                     }
-                                    crudService.update(eventId, object, user, event -> {
-                                        if (event.isRight()) {
-                                            final JsonObject message = new JsonObject();
-                                            message.put("id", calendarId);
-                                            message.put("eventId", eventId);
-                                            message.put("start_date", (String) null);
-                                            message.put("end_date", (String) null);
-                                            message.put("sendNotif", true);
-                                            notifyEventCreatedOrUpdated(request, user, message, false);
-                                            if (!remindersObject.get().equals(new JsonObject())) {
-                                                reminderHelper.remindersEventFormActions(remindersObject.get().containsKey(Field._ID)
-                                                        ? Actions.UPDATE_REMINDER : Actions.CREATE_REMINDER,
-                                                        eventId, user, remindersObject.get());
-                                            }
-                                            renderJson(request, event.right().getValue(), 200);
-                                        } else if (event.isLeft()) {
-                                            log.error("Error when getting notification informations.");
+                                    // Synchronise réellement RBS (create()/delete() le font déjà,
+                                    // update() ne le faisait jamais avant ce correctif — cf.
+                                    // RbsHelper.syncBookingsOnUpdate) : récupère l'état Mongo AVANT
+                                    // modification pour calculer un diff par id RBS, puis MUTE
+                                    // `object` (bookings/hasBooking) avec l'état réel avant de le
+                                    // persister.
+                                    // La synchro RBS est en meilleur effort : un échec de lecture/
+                                    // synchro ne doit jamais empêcher la sauvegarde de l'événement
+                                    // lui-même (comportement d'avant ce correctif, préservé) — SAUF
+                                    // un refus du droit "calendar.booking" (point C), qui bloque
+                                    // toute la sauvegarde (cf. onComplete ci-dessous).
+                                    // Point B2/C : si l'agenda visé n'appartient pas à l'auteur, toute
+                                    // NOUVELLE réservation demandée par cette modification exige le
+                                    // droit de partage granulaire "calendar.booking" (blocage total
+                                    // sans lui, proposition à valider par le propriétaire avec lui) —
+                                    // les réservations déjà existantes restent gérées par le diff
+                                    // habituel (conservation/annulation toujours autorisées).
+                                    eventService.retrieve(calendarId, eventId, user).compose(oldEvent -> {
+                                        JsonObject diff = RbsHelper.diffBookings(oldEvent.getJsonArray(Field.BOOKINGS, new JsonArray()),
+                                                object.getJsonArray(Field.BOOKINGS, new JsonArray()));
+                                        if (!Boolean.TRUE.equals(config.getBoolean(Field.ENABLE_RBS))) {
+                                            diff.put(Field.TOCREATE, new JsonArray());
                                         }
-                                    });
+                                        if (diff.getJsonArray(Field.TOCREATE, new JsonArray()).isEmpty()) {
+                                            return RbsHelper.syncBookingsOnUpdate(request, diff, object, user, config, eb);
+                                        }
+                                        return resolveCalendarRights(calendarId, user).compose(rights ->
+                                                extractPendingBookingProposal(diff, rights.getJsonObject(Field.OWNER, new JsonObject()),
+                                                        rights.getBoolean(Field.HASBOOKINGRIGHT, false), user)
+                                        ).compose(pendingProposal -> {
+                                            if (pendingProposal != null) {
+                                                pendingProposalRef.set(pendingProposal);
+                                            }
+                                            JsonObject diffForSync = pendingProposal != null
+                                                    ? diff.copy().put(Field.TOCREATE, new JsonArray()) : diff;
+                                            return RbsHelper.syncBookingsOnUpdate(request, diffForSync, object, user, config, eb);
+                                        });
+                                    }).onComplete(syncResult -> {
+                                                if (syncResult.failed() && BOOKING_RIGHT_DENIED.equals(syncResult.cause().getMessage())) {
+                                                    Renders.badRequest(request, "calendar.booking.right.denied");
+                                                    return;
+                                                }
+                                                if (syncResult.failed()) {
+                                                    log.error("[Calendar@EventHelper::update] RBS booking sync error for event "
+                                                            + eventId, syncResult.cause());
+                                                } else if (!syncResult.result().isEmpty()) {
+                                                    syncResult.result().forEach(failedDeletion ->
+                                                            log.error("[Calendar@EventHelper::update] RBS booking cancellation failed for event "
+                                                                    + eventId + ": " + failedDeletion));
+                                                }
+                                                crudService.update(eventId, object, user, event -> {
+                                                    if (event.isRight()) {
+                                                        if (pendingProposalRef.get() != null) {
+                                                            createBookingProposal(request, calendarId, eventId, user, pendingProposalRef.get());
+                                                        }
+                                                        final JsonObject message = new JsonObject();
+                                                        message.put("id", calendarId);
+                                                        message.put("eventId", eventId);
+                                                        message.put("start_date", (String) null);
+                                                        message.put("end_date", (String) null);
+                                                        message.put("sendNotif", true);
+                                                        notifyEventCreatedOrUpdated(request, user, message, false);
+                                                        if (!remindersObject.get().equals(new JsonObject())) {
+                                                            reminderHelper.remindersEventFormActions(remindersObject.get().containsKey(Field._ID)
+                                                                    ? Actions.UPDATE_REMINDER : Actions.CREATE_REMINDER,
+                                                                    eventId, user, remindersObject.get());
+                                                        }
+                                                        renderJson(request, event.right().getValue(), 200);
+                                                    } else if (event.isLeft()) {
+                                                        log.error("Error when getting notification informations.");
+                                                    }
+                                                });
+                                            });
                                 } else {
                                     log.error(String.format("[Calendar@EventHelper::update] " + "Submitted event is not valid"),
                                             I18n.getInstance().translate("calendar.error.date.saving", getHost(request), I18n.acceptLanguage(request)));
@@ -248,6 +337,110 @@ public class EventHelper extends MongoDbControllerHelper {
         });
     }
 
+
+    /** Point C : échec distinctif (message) pour distinguer un refus de droit d'une erreur RBS classique. */
+    private static final String BOOKING_RIGHT_DENIED = "booking-right-denied";
+
+    /**
+     * Point B2/C : récupère en un seul appel Mongo le propriétaire de l'agenda ET si l'auteur
+     * courant possède le droit granulaire "associer une réservation" dessus — stocké dans le champ
+     * dédié {@code bookingRights} du calendrier (liste de {@code {userId}}/{@code {groupId}}, hors
+     * du mécanisme de partage générique du socle, cf. {@code CalendarController#updateBookingRights}
+     * — le socle n'acceptant que 5 rôles de partage figés). Le propriétaire a toujours implicitement
+     * ce droit. En cas d'échec de lecture ou d'absence d'entrée trouvée, refuse prudemment (cohérent
+     * avec le blocage total choisi pour ce droit — jamais bloquant pour la sauvegarde de l'événement
+     * lui-même, seulement pour la réservation).
+     */
+    private Future<JsonObject> resolveCalendarRights(String calendarId, UserInfos user) {
+        Promise<JsonObject> promise = Promise.promise();
+        calendarService.list(Collections.singletonList(calendarId)).onComplete(res -> {
+            JsonObject result = new JsonObject().put(Field.OWNER, new JsonObject()).put(Field.HASBOOKINGRIGHT, false);
+            if (res.succeeded() && res.result() != null && !res.result().isEmpty()) {
+                JsonObject calendar = (JsonObject) res.result().getValue(0);
+                JsonObject owner = calendar.getJsonObject(Field.OWNER, new JsonObject());
+                result.put(Field.OWNER, owner);
+                String ownerId = owner.getString(Field.USERID);
+                if (ownerId != null && ownerId.equals(user.getUserId())) {
+                    result.put(Field.HASBOOKINGRIGHT, true);
+                } else {
+                    List<String> groupIds = user.getGroupsIds();
+                    boolean granted = calendar.getJsonArray(Field.BOOKINGRIGHTS, new JsonArray()).stream()
+                            .map(o -> (JsonObject) o)
+                            .anyMatch(s -> user.getUserId().equals(s.getString(Field.USERID))
+                                    || (groupIds != null && groupIds.contains(s.getString(Field.groupId))));
+                    result.put(Field.HASBOOKINGRIGHT, granted);
+                }
+            }
+            promise.complete(result);
+        });
+        return promise.future();
+    }
+
+    /**
+     * Point B2/C : décide, pour les NOUVELLES réservations demandées (issues de {@code diff},
+     * cf. {@link RbsHelper#diffBookings}), entre trois issues :
+     * <ul>
+     *   <li>aucune nouvelle réservation → {@code null} (flux normal, rien à faire ici) ;</li>
+     *   <li>propriétaire de l'agenda → {@code null} (flux normal, création/synchro RBS immédiate) ;</li>
+     *   <li>non-propriétaire SANS le droit "calendar.booking" → {@link Future#failedFuture} avec
+     *       {@link #BOOKING_RIGHT_DENIED} (blocage total, rien n'est créé ni proposé) ;</li>
+     *   <li>non-propriétaire AVEC le droit → proposition PENDING à valider par le propriétaire.</li>
+     * </ul>
+     * Ne touche jamais aux réservations déjà existantes conservées ({@code diff.toKeep}) ni aux
+     * suppressions ({@code diff.idsToDelete}) — toujours autorisées indépendamment de ce droit.
+     */
+    private Future<JsonObject> extractPendingBookingProposal(JsonObject diff, JsonObject owner, boolean hasBookingRight, UserInfos user) {
+        JsonArray toCreate = diff.getJsonArray(Field.TOCREATE, new JsonArray());
+        if (toCreate.isEmpty()) {
+            return Future.succeededFuture(null);
+        }
+        String ownerId = owner.getString(Field.USERID);
+        if (ownerId != null && ownerId.equals(user.getUserId())) {
+            return Future.succeededFuture(null);
+        }
+        if (!hasBookingRight) {
+            return Future.failedFuture(BOOKING_RIGHT_DENIED);
+        }
+
+        JsonObject proposedBy = new JsonObject()
+                .put(Field.USERID, user.getUserId())
+                .put(Field.DISPLAYNAME, user.getUsername());
+        return Future.succeededFuture(new JsonObject()
+                .put(Field.OWNER, owner)
+                .put(Field.PROPOSEDBY, proposedBy)
+                .put(Field.BOOKINGPAYLOAD, toCreate));
+    }
+
+    /**
+     * Point B2 : persiste la proposition PENDING puis notifie le propriétaire de l'agenda (pas de
+     * réservation RBS créée ici — elle ne le sera qu'à l'acceptation, cf.
+     * {@code BookingProposalController::processAcceptance}).
+     */
+    private void createBookingProposal(HttpServerRequest request, String calendarId, String eventId, UserInfos proposer, JsonObject pendingProposal) {
+        JsonObject owner = pendingProposal.getJsonObject(Field.OWNER, new JsonObject());
+        JsonObject proposedBy = pendingProposal.getJsonObject(Field.PROPOSEDBY, new JsonObject());
+        JsonArray bookingPayload = pendingProposal.getJsonArray(Field.BOOKINGPAYLOAD, new JsonArray());
+        String ownerId = owner.getString(Field.USERID);
+
+        bookingProposalService.create(calendarId, eventId, proposedBy, owner, bookingPayload)
+                .onSuccess(proposal -> {
+                    if (ownerId != null) {
+                        JsonObject params = new JsonObject()
+                                .put("uri", "/userbook/annuaire#" + proposer.getUserId() + "#" + proposer.getType())
+                                .put("username", proposer.getUsername())
+                                .put("calendarUri", "/calendar#/view/" + calendarId);
+                        JsonObject pushNotif = new JsonObject()
+                                .put("title", "push.notif.booking.proposal")
+                                .put("body", proposer.getUsername() + " " + I18n.getInstance().translate(
+                                        "calendar.booking.proposal.push.notif.body", getHost(request), I18n.acceptLanguage(request)));
+                        params.put("pushNotif", pushNotif);
+                        notification.notifyTimeline(request, "calendar.booking-proposal", proposer,
+                                Collections.singletonList(ownerId), calendarId, eventId, params, true);
+                    }
+                })
+                .onFailure(err -> log.error("[Calendar@EventHelper::createBookingProposal] Error creating booking proposal for event "
+                        + eventId, err));
+    }
 
     public void updateAllEvents(final HttpServerRequest request) {
         UserUtils.getAuthenticatedUserInfos(eb, request).onSuccess(user -> {
@@ -419,12 +612,15 @@ public class EventHelper extends MongoDbControllerHelper {
     }
 
     /**
-     * Delete calendarEvent
-     * The flow is the following:
-     * - if optional parameter deleteBookings is true, get calendarEvent
-     * - delete calendarEvent no matter what happens
-     * - if calendarEvent has been retrieved successfully, make calls to delete bookings in RBS (using event bus),
-     * if not the task is finished
+     * Suppression d'un événement d'agenda.
+     * Déroulé :
+     * - si le paramètre optionnel deleteBookings vaut true, on récupère l'événement au préalable
+     * - si l'événement porte des réservations RBS, on les annule EN PREMIER (via l'event bus)
+     * - l'événement n'est supprimé qu'une fois l'annulation des réservations réussie (ou s'il n'y
+     *   avait rien à annuler) — on ne laisse jamais une réservation RBS orpheline derrière un
+     *   événement déjà supprimé (ex. droits insuffisants sur une ressource d'un autre établissement,
+     *   cf. TypeAndResourceAppendPolicy côté RBS : l'annulation peut légitimement échouer, auquel cas
+     *   l'événement doit rester intact).
      * @param request HttpServerRequest request from the server
      */
     @Override
@@ -444,28 +640,28 @@ public class EventHelper extends MongoDbControllerHelper {
                                     : Future.succeededFuture(new JsonObject());
 
                             getCalendarEventInfos
-                                    .compose(event -> eventService.delete(calendarId, eventId, user))
-                                    .compose(res -> reminderHelper.remindersEventFormActions(Actions.DELETE_ALL_EVENT_REMINDERS, eventId))
-                                    .compose(result -> {
-                                        if (!getCalendarEventInfos.result().isEmpty()) {
-                                            return RbsHelper.checkAndDeleteBookingRights(user, getCalendarEventInfos.result(), eb);
+                                    .compose(event -> event.isEmpty()
+                                            ? Future.succeededFuture(new JsonArray())
+                                            : RbsHelper.checkAndDeleteBookingRights(user, event, eb))
+                                    .compose(deletionResults -> {
+                                        List<JsonObject> failedDeletions = ((List<JsonObject>) deletionResults.getList()).stream()
+                                                .filter((result) -> result.getString(Field.STATUS).equals(Field.ERROR))
+                                                .collect(Collectors.toList());
+                                        if (!failedDeletions.isEmpty()) {
+                                            failedDeletions.forEach((failedDeletion) -> log.error(failedDeletion.getString(Field.MESSAGE)));
+                                            return Future.failedFuture("calendar.rbs.sniplet.error.booking.deletion");
+                                        }
+                                        return eventService.delete(calendarId, eventId, user)
+                                                .compose(res -> reminderHelper.remindersEventFormActions(Actions.DELETE_ALL_EVENT_REMINDERS, eventId));
+                                    })
+                                    .onSuccess(res -> ok(request))
+                                    .onFailure(err -> {
+                                        if ("calendar.rbs.sniplet.error.booking.deletion".equals(err.getMessage())) {
+                                            badRequest(request, I18n.getInstance().translate("calendar.rbs.sniplet.error.booking.deletion", getHost(request), I18n.acceptLanguage(request)));
                                         } else {
-                                            return Future.succeededFuture(new JsonArray());
+                                            renderError(request);
                                         }
-                                    })
-                                    .onSuccess(res -> {
-                                        if (!res.isEmpty()) {
-                                            List<JsonObject> failedDeletions = ((List<JsonObject>) res.getList()).stream()
-                                                    .filter((result) -> result.getString(Field.STATUS).equals(Field.ERROR))
-                                                    .collect(Collectors.toList());
-                                            if (failedDeletions.size() > 0) {
-                                                badRequest(request, I18n.getInstance().translate("calendar.rbs.sniplet.error.booking.deletion", getHost(request), I18n.acceptLanguage(request)));
-                                                failedDeletions.forEach((failedDeletion) -> log.error(failedDeletion.getString(Field.MESSAGE)));
-                                            }
-                                        }
-                                        ok(request);
-                                    })
-                                    .onFailure(err -> renderError(request));
+                                    });
                         } else {
                             unauthorized(request);
                         }
@@ -520,6 +716,49 @@ public class EventHelper extends MongoDbControllerHelper {
         });
     }
 
+
+    /**
+     * Flux ICS public (anonyme, aucune vérification d'auth) d'un agenda d'établissement
+     * explicitement publié sur le portail public (portalPublished=true). Tous les événements du
+     * calendrier sont exposés sans filtrage par partage, contrairement à {@link #getIcal}.
+     */
+    public void getPublicIcal(final HttpServerRequest request) {
+        final String calendarId = request.params().get(CALENDAR_ID_PARAMETER);
+        calendarService.checkBooleanField(calendarId, Field.PORTALPUBLISHED)
+                .onSuccess(isPublished -> {
+                    if (!Boolean.TRUE.equals(isPublished)) {
+                        notFound(request);
+                        return;
+                    }
+                    eventService.listPublic(calendarId, event -> {
+                        if (event.isLeft()) {
+                            renderError(request);
+                            return;
+                        }
+                        JsonObject message = new JsonObject()
+                                .put("action", net.atos.entng.calendar.ical.ICalHandler.ACTION_GET)
+                                .put("events", event.right().getValue());
+                        eb.request(net.atos.entng.calendar.ical.ICalHandler.ICAL_HANDLER_ADDRESS, message, reply -> {
+                            if (reply.failed()) {
+                                renderError(request);
+                                return;
+                            }
+                            JsonObject response = (JsonObject) reply.result().body();
+                            String content = response.getString("ics");
+                            try {
+                                File f = File.createTempFile(calendarId, "ics");
+                                Files.write(Paths.get(f.getAbsolutePath()), content.getBytes());
+                                request.response().putHeader("Content-Type", "text/calendar; charset=utf-8");
+                                request.response().sendFile(f.getAbsolutePath());
+                            } catch (IOException e) {
+                                log.error("[Calendar@EventHelper::getPublicIcal] Failed to write ICS file", e);
+                                renderError(request);
+                            }
+                        });
+                    });
+                })
+                .onFailure(err -> renderError(request));
+    }
 
     public void importIcal(final HttpServerRequest request) {
         UserUtils.getUserInfos(eb, request, new Handler<UserInfos>() {
