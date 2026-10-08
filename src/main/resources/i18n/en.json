@@ -352,5 +352,17 @@
   "calendar.event.resources.attached": "Already added",
   "calendar.event.resources.mediacentre.sources.down": "No mediacentre source responded ([[sources]]). The search could not complete.",
   "calendar.event.resources.mediacentre.partial": "Some sources did not respond ([[sources]]).",
-  "calendar.event.resources.mediacentre.error": "The mediacentre search failed."
+  "calendar.event.resources.mediacentre.error": "The mediacentre search failed.",
+  "calendar.switch.invitation.title": "A new version of Calendar is available.",
+  "calendar.switch.invitation.body": "Same calendar, same content: only the layout changes.",
+  "calendar.switch.invitation.try": "Try it",
+  "calendar.switch.invitation.later": "Later",
+  "calendar.switch.return.title": "You are using the new version of Calendar.",
+  "calendar.switch.return.back": "Back to the previous version",
+  "calendar.switch.return.dismiss": "Don't show again",
+  "calendar.switch.feedback.question": "What are you missing?",
+  "calendar.switch.feedback.placeholder": "In one sentence (optional)",
+  "calendar.switch.feedback.send": "Send and go back",
+  "calendar.switch.feedback.skip": "Go back without answering",
+  "calendar.switch.feedback.thanks": "Thank you, duly noted."
 }

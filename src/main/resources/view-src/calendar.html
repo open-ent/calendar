@@ -12,7 +12,57 @@
         var ENABLE_RBS = {{enableRbs}};
         var ENABLE_ZIMBRA = {{enableZimbra}}
         var ENABLE_REMINDER = {{enableReminder}}
+        var CALENDAR_FRONTEND_UI = "{{frontendUi}}";
     </script>
+    <!--
+      Styles du bandeau de bascule, en ligne plutôt que dans public/sass/ : ce bandeau est un
+      échafaudage de migration, destiné à disparaître avec l'IHM AngularJS. Le garder ici évite
+      d'ajouter — puis d'avoir à retirer — une partielle dans la feuille du module.
+      Teintes neutres assumées : la feuille du thème chargée par cette IHM n'expose pas les jetons
+      `--openent-*` du socle, et deviner les siens donnerait un rendu faux sur certains thèmes.
+    -->
+    <style type="text/css">
+      .calendar-ui-switch {
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        z-index: 9000;
+        max-width: calc(100vw - 32px);
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        background: #243242;
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, .25);
+        font-size: 14px;
+      }
+      .calendar-ui-switch[hidden] { display: none; }
+      .calendar-ui-switch-text { display: flex; flex-direction: column; gap: 2px; }
+      .calendar-ui-switch-text span { opacity: .8; }
+      .calendar-ui-switch-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+      .calendar-ui-switch-actions button {
+        border: 0;
+        border-radius: 6px;
+        padding: 8px 14px;
+        font-size: 14px;
+        cursor: pointer;
+        background: transparent;
+        color: #fff;
+        text-decoration: underline;
+      }
+      .calendar-ui-switch-actions button.primary {
+        background: #fff;
+        color: #243242;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      @media (max-width: 600px) {
+        .calendar-ui-switch { flex-direction: column; align-items: stretch; gap: 12px; }
+      }
+    </style>
     <script type="text/ng-template" id="empty"></script>
   </head>
 
@@ -25,6 +75,25 @@
           <container template="main"></container>
         </div>
     </portal>
+
+    <!--
+      Invitation à essayer la nouvelle IHM React. Rendue ici en HTML plutôt que construite en
+      JavaScript : les libellés passent par la balise i18n du gabarit, dans un contexte HTML — le seul que le moteur
+      de gabarit échappe correctement (les textes français portent des apostrophes).
+      Hors de <portal> et en position fixe : aucune interaction avec la mise en page AngularJS.
+      Masquée par défaut ; c'est ui-switch.js qui décide de l'afficher, d'après la préférence usager.
+    -->
+    <div id="calendar-ui-switch" class="calendar-ui-switch" hidden>
+      <div class="calendar-ui-switch-text">
+        <strong>{{#i18n}}calendar.switch.invitation.title{{/i18n}}</strong>
+        <span>{{#i18n}}calendar.switch.invitation.body{{/i18n}}</span>
+      </div>
+      <div class="calendar-ui-switch-actions">
+        <button type="button" data-action="later">{{#i18n}}calendar.switch.invitation.later{{/i18n}}</button>
+        <button type="button" data-action="try" class="primary">{{#i18n}}calendar.switch.invitation.try{{/i18n}}</button>
+      </div>
+    </div>
+    <script type="text/javascript" src="/calendar/public/ui-switch.js?v=@@VERSION"></script>
   </body>
 
 </html>

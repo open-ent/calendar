@@ -456,6 +456,51 @@ export const savePreference = async (preference: CalendarPreference): Promise<vo
   });
 };
 
+// ── Choix d'IHM (bascule AngularJS → React) ──────────────────────────────────
+/**
+ * Préférence portant le choix d'interface et l'état des bandeaux qui le proposent.
+ *
+ * Clé distincte de `calendar` : l'IHM AngularJS y réécrit `{selectedCalendars}` seul à chaque case
+ * cochée, ce qui effacerait tout le reste. Le serveur lit `ui` pour servir la bonne vue
+ * (CalendarController#preferredUi). Pas de tiret dans la clé : entcore retire les caractères non
+ * alphanumériques avant d'en faire un nom de propriété dans le graphe.
+ */
+export interface UiPreference {
+  /** Choix explicite de l'usager. Absent = la plateforme tranche. */
+  ui?: 'react' | 'angular';
+  /** « Plus tard » sur l'invitation affichée par l'IHM AngularJS. */
+  invitationDismissed?: boolean;
+  invitationShown?: number;
+  /** « Ne plus afficher » sur le bandeau de retour de l'IHM React. */
+  returnDismissed?: boolean;
+  returnShown?: number;
+  /** Réponse libre à « Qu'est-ce qui vous manque ? », au moment du retour en arrière. */
+  feedback?: string;
+  feedbackAt?: string;
+}
+
+export const getUiPreference = async (): Promise<UiPreference> => {
+  const res = await fetch('/userbook/preference/calendarUi', base);
+  if (!res.ok) return {};
+  // L'enveloppe est `{ preference: "<json>" }` — une chaîne, pas un objet.
+  const body = (await res.json()) as { preference?: string } | null;
+  if (!body?.preference) return {};
+  try {
+    return (JSON.parse(body.preference) as UiPreference) ?? {};
+  } catch {
+    return {};
+  }
+};
+
+export const saveUiPreference = async (preference: UiPreference): Promise<void> => {
+  await fetch('/userbook/preference/calendarUi', {
+    ...base,
+    method: 'PUT',
+    headers: mutHeaders(),
+    body: JSON.stringify(preference),
+  });
+};
+
 // ── Partage d'un calendrier ───────────────────────────────────────────────────
 export const getCalendarShare = async (calendarId: string): Promise<ShareJson> =>
   json<ShareJson>(await fetch(`/calendar/share/json/${calendarId}`, base));
@@ -488,6 +533,8 @@ export const api = {
   addExternalCalendar,
   getPreference,
   savePreference,
+  getUiPreference,
+  saveUiPreference,
   icalExportUrl,
   importIcal,
   attachmentDownloadUrl,

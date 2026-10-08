@@ -351,5 +351,17 @@
   "calendar.event.resources.attached": "Déjà ajoutée",
   "calendar.event.resources.mediacentre.sources.down": "Aucune source du médiacentre n'a répondu ([[sources]]). La recherche n'a pas pu aboutir.",
   "calendar.event.resources.mediacentre.partial": "Certaines sources n'ont pas répondu ([[sources]]).",
-  "calendar.event.resources.mediacentre.error": "La recherche dans le médiacentre a échoué."
+  "calendar.event.resources.mediacentre.error": "La recherche dans le médiacentre a échoué.",
+  "calendar.switch.invitation.title": "Une nouvelle version de l'Agenda est disponible.",
+  "calendar.switch.invitation.body": "Même agenda, même contenu : seule la présentation change.",
+  "calendar.switch.invitation.try": "L'essayer",
+  "calendar.switch.invitation.later": "Plus tard",
+  "calendar.switch.return.title": "Vous utilisez la nouvelle version de l'Agenda.",
+  "calendar.switch.return.back": "Revenir à l'ancienne version",
+  "calendar.switch.return.dismiss": "Ne plus afficher",
+  "calendar.switch.feedback.question": "Qu'est-ce qui vous manque ?",
+  "calendar.switch.feedback.placeholder": "En une phrase (facultatif)",
+  "calendar.switch.feedback.send": "Envoyer et revenir",
+  "calendar.switch.feedback.skip": "Revenir sans répondre",
+  "calendar.switch.feedback.thanks": "Merci, c'est noté."
 }

@@ -87,19 +87,25 @@ public class CalendarController extends MongoDbControllerHelper {
     private final UserService userService;
     private final Neo4j neo4j = Neo4j.getInstance();
 
-    /** IHM par défaut : "react" (nouvelle) ou "angular" (ancienne), pilotée par la conf `frontend-ui`
-     *  (bloc du module dans ent-core.yaml, alimentée par FRONTEND_UI_DEFAULT).
-     *  Défaut "react" : la migration React (CCTP 51C) a la parité (agenda jour/semaine/mois,
-     *  calendriers + événements CRUD, partage calendrier + événement).
-     *  NB : launcher-next conserve la clé `frontend-ui` (bloc `config:` stocké verbatim) ; le fallback
-     *  Java "react" ne s'applique que si la conf est absente. Override par `?ui=react|angular`. */
-    private String frontendUi = "react";
+    /** Clé de préférence usager portant le choix d'IHM, et l'état des bandeaux qui le proposent.
+     *  Clé dédiée, et non la préférence `calendar` existante : l'IHM AngularJS y réécrit
+     *  {@code {selectedCalendars}} SEUL à chaque case cochée (cf. {@code Preference.update()}),
+     *  ce qui effacerait le choix d'interface à la première manipulation de la barre latérale. */
+    private static final String UI_PREFERENCE = "calendarUi";
+
+    /** IHM servie quand l'usager n'a rien choisi : "react" (nouvelle) ou "angular" (ancienne),
+     *  pilotée par la conf `frontend-ui` du bloc du module dans ent-core.yaml, elle-même alimentée
+     *  par la variable CALENDAR_FRONTEND_UI (isolée de FRONTEND_UI_DEFAULT, qui pilote les modules
+     *  dont la migration est terminée — ce qui n'est pas le cas de l'agenda).
+     *  NB : launcher-next conserve la clé `frontend-ui` (bloc `config:` stocké verbatim) ; le repli
+     *  Java ne joue que si la conf est absente. */
+    private String frontendUi = "angular";
 
     @Override
     public void init(Vertx vertx, JsonObject config, RouteMatcher rm,
                      Map<String, fr.wseduc.webutils.security.SecuredAction> securedActions) {
         super.init(vertx, config, rm, securedActions);
-        this.frontendUi = "angular".equals(config.getString("frontend-ui", "react")) ? "angular" : "react";
+        this.frontendUi = "react".equals(config.getString("frontend-ui", "angular")) ? "react" : "angular";
     }
 
     public CalendarController(String collection, ServiceFactory serviceFactory, EventBus eb, JsonObject config) {
@@ -123,20 +129,34 @@ public class CalendarController extends MongoDbControllerHelper {
     @Get("")
     @SecuredAction("calendar.view")
     public void view(HttpServerRequest request) {
-        String host = getHost(request);
-        String lang = I18n.acceptLanguage(request);
-        // Choix de l'IHM (CCTP 51C — migration React) : défaut piloté par la conf `frontend-ui`
-        // (react|angular, défaut angular), override par requête `?ui=react|angular`.
-        // calendar.html = IHM AngularJS existante (défaut) ; calendar-react.html = nouvelle IHM React.
+        final String host = getHost(request);
+        final String lang = I18n.acceptLanguage(request);
+        // Choix de l'IHM (CCTP 51C — migration React), par ordre de priorité décroissante :
+        //   1. `?ui=react|angular` — dérogation ponctuelle, NON mémorisée (vérification, support) ;
+        //   2. la préférence de l'usager (clé `calendarUi`), posée par les bandeaux de bascule ;
+        //   3. la conf `frontend-ui` de la plateforme.
+        // calendar.html = IHM AngularJS historique ; calendar-react.html = nouvelle IHM React.
         final String uiParam = request.getParam("ui");
-        final String ui = ("react".equals(uiParam) || "angular".equals(uiParam)) ? uiParam : frontendUi;
-        final String view = "react".equals(ui) ? "calendar-react.html" : "calendar.html";
+        final String forcedUi = ("react".equals(uiParam) || "angular".equals(uiParam)) ? uiParam : null;
+
         UserUtils.getUserInfos(eb, request, user -> {
-            if (user != null) {
+            if (user == null) {
+                unauthorized(request);
+                return;
+            }
+            preferredUi(user.getUserId(), forcedUi).onSuccess(ui -> {
+                final String view = "react".equals(ui) ? "calendar-react.html" : "calendar.html";
+
                 final JsonObject context = new JsonObject();
                 context.put(Field.ENABLERBS, config.getBoolean(Field.ENABLE_RBS, false));
                 context.put(Field.ENABLEZIMBRA, config.getBoolean(Field.ENABLE_ZIMBRA, false));
                 context.put(Field.ENABLEREMINDER, config.getBoolean(Field.ENABLEREMINDER, false));
+                // L'IHM effectivement servie : les bandeaux de bascule s'en servent pour savoir lequel
+                // des deux proposer. Leur ÉTAT (rejet, nombre d'affichages), lui, est lu par le bandeau
+                // lui-même sur /userbook/preference/calendarUi — pas injecté ici, pour n'avoir à
+                // échapper aucun texte libre dans la page.
+                context.put("frontendUi", ui);
+
                 calendarService.getDefaultCalendar(user)
                         .onSuccess(calendar -> {
                             if (calendar.isEmpty() || calendar.fieldNames().isEmpty()) {
@@ -150,8 +170,53 @@ public class CalendarController extends MongoDbControllerHelper {
                             eventHelper.onAccess(request);
                         })
                         .onFailure(err -> renderError(request));
-            }
+            });
         });
+    }
+
+    /**
+     * IHM à servir : la dérogation d'URL si elle est présente, sinon le choix mémorisé par
+     * l'usager, sinon celui de la plateforme.
+     *
+     * Le choix est lu à SA SOURCE, le nœud {@code UserAppConf} du graphe, et non via la session ni
+     * via le bus {@code userbook.preferences} : vérifié en local, ni l'un ni l'autre ne restitue une
+     * clé écrite pendant la session en cours — l'usager serait renvoyé sur l'ancienne IHM à chaque
+     * visite malgré son choix. C'est ce même nœud qu'écrit {@code PUT /userbook/preference/:app}.
+     *
+     * ⚠ La clé ne peut porter ni tiret ni point : entcore retire les caractères non alphanumériques
+     * avant de construire le nom de propriété Cypher (d'où {@code presences.register} rangé en
+     * {@code uac.presencesregister}). {@code calendarUi} traverse donc la chaîne inchangée.
+     *
+     * Aucune panne de cette lecture ne doit empêcher l'agenda de s'afficher : à la moindre
+     * difficulté, la plateforme tranche.
+     */
+    private Future<String> preferredUi(String userId, String forcedUi) {
+        if (forcedUi != null) return Future.succeededFuture(forcedUi);
+
+        final Promise<String> promise = Promise.promise();
+        final String query = "MATCH (:User {id:{userId}})-[:PREFERS]->(uac:UserAppConf) " +
+                "RETURN uac." + UI_PREFERENCE + " AS preference";
+        neo4j.execute(query, new JsonObject().put("userId", userId), message -> {
+            promise.complete(readUi(message.body()));
+        });
+        return promise.future();
+    }
+
+    /** Extrait le choix d'IHM du résultat Neo4j — la préférence y est rangée en CHAÎNE JSON. */
+    private String readUi(JsonObject body) {
+        try {
+            final JsonArray rows = body.getJsonArray("result", new JsonArray());
+            if (rows.isEmpty()) return frontendUi;
+            final String raw = rows.getJsonObject(0).getString("preference");
+            if (raw == null || raw.trim().isEmpty()) return frontendUi;
+            final String ui = new JsonObject(raw).getString("ui");
+            return ("react".equals(ui) || "angular".equals(ui)) ? ui : frontendUi;
+        } catch (Exception e) {
+            // Préférence illisible (écriture partielle, format d'une version antérieure), ou graphe
+            // en échec : la plateforme tranche. Jamais d'erreur 500 pour un choix d'habillage.
+            log.warn("[Calendar@readUi] préférence " + UI_PREFERENCE + " illisible", e);
+            return frontendUi;
+        }
     }
 
     /**

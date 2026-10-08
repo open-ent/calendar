@@ -10,6 +10,7 @@ import { RecurrenceScope, RecurrenceScopeModal } from '../components/RecurrenceS
 import { AgendaToolbar } from '../features/AgendaToolbar';
 import { DayView, ListView, MonthView, WeekView } from '../features/AgendaViews';
 import { CalendarSidebar } from '../features/CalendarSidebar';
+import { UiSwitchBanner } from '../features/UiSwitchBanner';
 import { useCalendarVisibility } from '../hooks/useCalendarVisibility';
 import {
   calendarRights,
@@ -356,6 +357,8 @@ export function Agenda() {
           {view === 'list' && <ListView {...viewProps} />}
         </div>
       </div>
+
+      <UiSwitchBanner />
 
       <Suspense fallback={null}>
       {eventDialog && (
