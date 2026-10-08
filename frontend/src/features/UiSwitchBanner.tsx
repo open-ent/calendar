@@ -9,12 +9,25 @@ import { api, UiPreference } from '../api';
 const MAX_DISPLAYS = 5;
 
 /**
+ * Réglage durable du choix d'interface, dans le dashboard — hors de cette application, à dessein.
+ * Un lien permanent vers l'ancienne version, posé dans la nouvelle, y laisserait une trace de
+ * l'interface qu'on remplace ; et il faudrait l'y poser puis l'en retirer pour chaque module migré.
+ * Ce bandeau fait découvrir le changement et s'efface ; la page de réglages gouverne.
+ * Chemin figé : le module n'a aucun moyen de découvrir le `basePath` du dashboard, qui vaut
+ * `/dashboard` en local comme en production.
+ */
+const SETTINGS_URL = '/dashboard/account/settings';
+
+/**
  * Bandeau de retour vers l'IHM AngularJS, pendant la période de cohabitation des deux interfaces.
  *
  * Symétrique de l'invitation posée sur l'ancienne IHM (`public/js/ui-switch.js`) : celle-ci propose
  * d'essayer la nouvelle, celui-ci laisse la porte ouverte dans l'autre sens — personne ne doit se
  * sentir enfermé dans une interface qu'il n'a pas choisie. Le retour en arrière passe par une
  * question en une ligne : c'est le seul moment où l'on saura POURQUOI quelqu'un repart.
+ *
+ * Il s'efface au bout de quelques affichages SANS condamner la sortie : celle-ci vit dans les
+ * paramètres du compte, vers lesquels il pointe (cf. {@link SETTINGS_URL}).
  *
  * La réponse est stockée dans la préférence elle-même, faute de collecteur dédié. Pour la relire :
  * {@code MATCH (u:User)-[:PREFERS]->(uac:UserAppConf) WHERE uac.calendarUi CONTAINS 'feedback'
@@ -115,7 +128,13 @@ export function UiSwitchBanner() {
         </form>
       ) : (
         <div className="d-flex align-items-center gap-16 flex-wrap">
-          <span className="flex-fill">{t('calendar.switch.return.title')}</span>
+          <div className="flex-fill">
+            <div>{t('calendar.switch.return.title')}</div>
+            <small className="text-muted">
+              {t('calendar.switch.return.where')}{' '}
+              <a href={SETTINGS_URL}>{t('calendar.switch.return.settings')}</a>.
+            </small>
+          </div>
           <div className="d-flex align-items-center gap-8">
             <Button type="button" color="tertiary" variant="ghost" onClick={dismiss}>
               {t('calendar.switch.return.dismiss')}

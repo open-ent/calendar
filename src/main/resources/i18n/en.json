@@ -364,5 +364,7 @@
   "calendar.switch.feedback.placeholder": "In one sentence (optional)",
   "calendar.switch.feedback.send": "Send and go back",
   "calendar.switch.feedback.skip": "Go back without answering",
-  "calendar.switch.feedback.thanks": "Thank you, duly noted."
+  "calendar.switch.feedback.thanks": "Thank you, duly noted.",
+  "calendar.switch.return.where": "You can change this at any time from your",
+  "calendar.switch.return.settings": "account settings"
 }

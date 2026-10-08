@@ -363,5 +363,7 @@
   "calendar.switch.feedback.placeholder": "En une phrase (facultatif)",
   "calendar.switch.feedback.send": "Envoyer et revenir",
   "calendar.switch.feedback.skip": "Revenir sans répondre",
-  "calendar.switch.feedback.thanks": "Merci, c'est noté."
+  "calendar.switch.feedback.thanks": "Merci, c'est noté.",
+  "calendar.switch.return.where": "Ce choix reste modifiable à tout moment depuis les",
+  "calendar.switch.return.settings": "paramètres de votre compte"
 }
