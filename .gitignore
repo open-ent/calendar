@@ -47,3 +47,12 @@ gradle/
 dependency-reduced-pom.xml
 edifice
 .pnpm-store
+# Sorties du build React (frontend/), copiées à plat dans public/ par build.sh
+/src/main/resources/public/*
+!/src/main/resources/public/img/
+!/src/main/resources/public/sass/
+!/src/main/resources/public/template/
+!/src/main/resources/public/ts/
+!/src/main/resources/public/widgets/
+!/src/main/resources/public/index.html
+!/src/main/resources/public/ui-switch.js
