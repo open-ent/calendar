@@ -12,7 +12,7 @@ export interface AgendaToolbarProps {
   onToday: () => void;
 }
 
-/** Bascule de vue (Jour / Semaine / Mois / Liste) et navigation dans la période. */
+/** Bascule de vue (Jour / Semaine / Quinzaine / Mois / Liste) et navigation dans la période. */
 export function AgendaToolbar({
   view,
   periodLabel,
@@ -25,6 +25,7 @@ export function AgendaToolbar({
   const views: { value: AgendaView; label: string }[] = [
     { value: 'day', label: t('calendar.view.day', { defaultValue: 'Jour' }) },
     { value: 'week', label: t('calendar.view.week', { defaultValue: 'Semaine' }) },
+    { value: 'fortnight', label: t('calendar.view.fortnight', { defaultValue: 'Quinzaine' }) },
     { value: 'month', label: t('calendar.view.month', { defaultValue: 'Mois' }) },
     { value: 'list', label: t('calendar.view.list', { defaultValue: 'Liste' }) },
   ];

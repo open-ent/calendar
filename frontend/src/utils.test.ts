@@ -2,16 +2,23 @@ import { describe, expect, it } from 'vitest';
 
 import {
   daySpan,
+  fortnightDays,
   isMultiDay,
   isoUtcToLocalInput,
   isSameDay,
   isSameMonth,
+  isWithinRange,
   localInputToIsoUtc,
   monthGrid,
   occupiesDay,
+  parseEdtLocalDateTime,
+  parseRbsUtcDateTime,
+  periodLabel,
   readableCause,
   recurrenceSummary,
+  shiftCursor,
   startOfWeek,
+  toDateOnly,
   weekDays,
 } from './utils';
 
@@ -27,6 +34,31 @@ describe('semaine', () => {
     expect(days).toHaveLength(7);
     expect(ymd(days[0])).toBe('2026-11-16');
     expect(ymd(days[6])).toBe('2026-11-22');
+  });
+});
+
+describe('quinzaine', () => {
+  // Même cadrage que côté AngularJS (`libs/infra-front/src/ts/calendar.ts`, increment
+  // `fortnight`) : démarre un lundi, navigue par pas de 14 jours.
+  it('fortnightDays renvoie 14 jours lundi→dimanche sur deux semaines', () => {
+    const days = fortnightDays(startOfWeek(new Date('2026-11-18T12:00:00')));
+    expect(days).toHaveLength(14);
+    expect(ymd(days[0])).toBe('2026-11-16');
+    expect(ymd(days[6])).toBe('2026-11-22');
+    expect(ymd(days[7])).toBe('2026-11-23');
+    expect(ymd(days[13])).toBe('2026-11-29');
+  });
+
+  it('shiftCursor avance/recule de 14 jours en vue quinzaine', () => {
+    const cursor = new Date('2026-11-18T12:00:00');
+    expect(ymd(shiftCursor(cursor, 'fortnight', 1))).toBe('2026-12-02');
+    expect(ymd(shiftCursor(cursor, 'fortnight', -1))).toBe('2026-11-04');
+  });
+
+  it('periodLabel couvre toute la plage de 14 jours', () => {
+    const label = periodLabel(new Date('2026-11-18T12:00:00'), 'fortnight');
+    expect(label).toContain('16 nov.');
+    expect(label).toContain('29 nov. 2026');
   });
 });
 
@@ -110,6 +142,52 @@ describe('événements sur plusieurs jours', () => {
     expect(occupiesDay(start, d('2026-11-15T10:00:00'), day('2026-11-16'))).toBe(true); // fin avant début
     expect(occupiesDay(start, undefined, day('2026-11-16'))).toBe(true); // pas de fin
     expect(occupiesDay('pas-une-date', start, day('2026-11-16'))).toBe(false);
+  });
+});
+
+describe('disponibilités (panneau EDT + RBS)', () => {
+  it('toDateOnly formate en YYYY-MM-DD, zéro-paddé', () => {
+    expect(toDateOnly(new Date(2026, 0, 5))).toBe('2026-01-05');
+    expect(toDateOnly(new Date(2026, 10, 18))).toBe('2026-11-18');
+  });
+
+  // `edt/.../common/courses` renvoie une heure LOCALE sans zone — `new Date(...)` doit la
+  // comprendre comme heure locale (comportement par défaut), pas comme UTC.
+  it('parseEdtLocalDateTime convertit "YYYY-MM-DD HH:mm:ss" en heure locale comprise par Date', () => {
+    const iso = parseEdtLocalDateTime('2026-11-18 09:00:00');
+    expect(iso).toBe('2026-11-18T09:00:00');
+    const d = new Date(iso);
+    expect(d.getHours()).toBe(9);
+    expect(d.getMinutes()).toBe(0);
+  });
+
+  // `rbs/bookings/all` renvoie un TIMESTAMP déjà en UTC mais SANS indicateur de zone — sans le
+  // 'Z' ajouté ici, `new Date(...)` l'interpréterait à tort comme une heure locale et décalerait
+  // l'affichage d'1h/2h (cf. mémoire bug-fuseau-horaire-edt-import-rbs).
+  it('parseRbsUtcDateTime ajoute le Z manquant', () => {
+    expect(parseRbsUtcDateTime('2026-11-18 09:00:00')).toBe('2026-11-18T09:00:00Z');
+    expect(new Date(parseRbsUtcDateTime('2026-11-18 09:00:00')).getUTCHours()).toBe(9);
+  });
+
+  it('parseRbsUtcDateTime ne double pas un suffixe de zone déjà présent', () => {
+    expect(parseRbsUtcDateTime('2026-11-18T09:00:00Z')).toBe('2026-11-18T09:00:00Z');
+    expect(parseRbsUtcDateTime('2026-11-18T09:00:00+02:00')).toBe('2026-11-18T09:00:00+02:00');
+  });
+
+  // Reproduit le bug constaté sur l'ENT local : `/rbs/bookings/all` renvoie aussi
+  // l'enregistrement parent d'une série périodique, dont le début réel est hors de la semaine
+  // affichée — sans ce filtre, son `end_date` (date de fin de récurrence, pas une heure réelle)
+  // s'affichait comme un créneau "09:00-00:00" au lieu d'être écarté.
+  it('isWithinRange exclut un créneau dont le début réel tombe hors de la période affichée', () => {
+    const weekStart = new Date('2026-10-05T00:00:00');
+    const weekEnd = new Date('2026-10-12T00:00:00');
+    // Occurrence réelle de la semaine affichée : incluse.
+    expect(isWithinRange('2026-10-05T07:00:00Z', weekStart, weekEnd)).toBe(true);
+    // Enregistrement parent de la série, débutant 2 semaines plus tôt : exclu.
+    expect(isWithinRange('2026-09-21T07:00:00Z', weekStart, weekEnd)).toBe(false);
+    // Borne de fin exclusive.
+    expect(isWithinRange('2026-10-12T00:00:00Z', weekStart, weekEnd)).toBe(false);
+    expect(isWithinRange('2026-10-11T20:00:00Z', weekStart, weekEnd)).toBe(true);
   });
 });
 

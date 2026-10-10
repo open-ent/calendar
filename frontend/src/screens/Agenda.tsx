@@ -8,7 +8,7 @@ import { api, Calendar, CalendarEvent } from '../api';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { RecurrenceScope, RecurrenceScopeModal } from '../components/RecurrenceScopeModal';
 import { AgendaToolbar } from '../features/AgendaToolbar';
-import { DayView, ListView, MonthView, WeekView } from '../features/AgendaViews';
+import { DayView, FortnightView, ListView, MonthView, WeekView } from '../features/AgendaViews';
 import { CalendarSidebar } from '../features/CalendarSidebar';
 import { UiSwitchBanner } from '../features/UiSwitchBanner';
 import { useCalendarVisibility } from '../hooks/useCalendarVisibility';
@@ -22,6 +22,7 @@ import {
 import { AgendaView, calendarColor, periodLabel, shiftCursor } from '../utils';
 import { CalendarDialog } from './CalendarDialog';
 import { DeleteEventModal } from './DeleteEventModal';
+import { AvailabilityDialog } from './AvailabilityDialog';
 import { IcsImportDialog } from './IcsImportDialog';
 
 // Le formulaire et la fiche d'un événement embarquent l'éditeur riche (tiptap, ~800 ko) : on
@@ -75,7 +76,17 @@ export function Agenda() {
     return types;
   }, [canCreateStructure, canCreateGroup]);
   // Un agenda d'établissement se rattache à la structure de l'usager (la première, comme l'Angular).
-  const myStructureId = (user as { structures?: string[] } | undefined)?.structures?.[0];
+  const myStructures = user as { structures?: string[]; structureNames?: string[] } | undefined;
+  const myStructureId = myStructures?.structures?.[0];
+  /** Pour le sélecteur du panneau Disponibilités — mêmes listes parallèles que l'Angular (`model.me.structures`/`structureNames`). */
+  const availabilityStructures = useMemo(
+    () =>
+      (myStructures?.structures ?? []).map((id, i) => ({
+        id,
+        name: myStructures?.structureNames?.[i] ?? id,
+      })),
+    [myStructures],
+  );
 
   const calendarsQuery = useQuery({ queryKey: ['calendar', 'calendars'], queryFn: api.getCalendars });
   const calendars = useMemo(() => calendarsQuery.data ?? [], [calendarsQuery.data]);
@@ -158,6 +169,7 @@ export function Agenda() {
   const [shareDialog, setShareDialog] = useState<ShareDialogState>(null);
   const [portalPublishDialog, setPortalPublishDialog] = useState<Calendar | null>(null);
   const [icsImportDialog, setIcsImportDialog] = useState<Calendar | null>(null);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [scopePrompt, setScopePrompt] = useState<ScopePromptState>(null);
   const [eventToDelete, setEventToDelete] = useState<CalendarEvent | null>(null);
@@ -286,21 +298,33 @@ export function Agenda() {
     <>
       <AppHeader
         render={() => (
-          <Button
-            type="button"
-            color="primary"
-            variant="filled"
-            leftIcon={<IconPlus />}
-            disabled={writableCalendars.length === 0}
-            onClick={() =>
-              setEventDialog({
-                defaultCalendarId:
-                  writableCalendars.find((c) => isVisible(c._id))?._id ?? writableCalendars[0]?._id,
-              })
-            }
-          >
-            {t('calendar.event.new', { defaultValue: 'Nouvel événement' })}
-          </Button>
+          <div className="d-flex align-items-center gap-8">
+            {availabilityStructures.length > 0 && (
+              <Button
+                type="button"
+                color="tertiary"
+                variant="outline"
+                onClick={() => setAvailabilityOpen(true)}
+              >
+                {t('calendar.availability.menu', { defaultValue: 'Disponibilité' })}
+              </Button>
+            )}
+            <Button
+              type="button"
+              color="primary"
+              variant="filled"
+              leftIcon={<IconPlus />}
+              disabled={writableCalendars.length === 0}
+              onClick={() =>
+                setEventDialog({
+                  defaultCalendarId:
+                    writableCalendars.find((c) => isVisible(c._id))?._id ?? writableCalendars[0]?._id,
+                })
+              }
+            >
+              {t('calendar.event.new', { defaultValue: 'Nouvel événement' })}
+            </Button>
+          </div>
         )}
       >
         {currentApp && <Breadcrumb app={currentApp} />}
@@ -353,6 +377,7 @@ export function Agenda() {
 
           {view === 'day' && <DayView {...viewProps} />}
           {view === 'week' && <WeekView {...viewProps} />}
+          {view === 'fortnight' && <FortnightView {...viewProps} />}
           {view === 'month' && <MonthView {...viewProps} />}
           {view === 'list' && <ListView {...viewProps} />}
         </div>
@@ -404,6 +429,13 @@ export function Agenda() {
       )}
       {icsImportDialog && (
         <IcsImportDialog calendar={icsImportDialog} onClose={() => setIcsImportDialog(null)} />
+      )}
+      {availabilityOpen && (
+        <AvailabilityDialog
+          structures={availabilityStructures}
+          defaultStructureId={myStructureId}
+          onClose={() => setAvailabilityOpen(false)}
+        />
       )}
       {portalPublishDialog && (
         <PortalPublishDialog

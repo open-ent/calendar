@@ -276,43 +276,45 @@ export function CalendarSidebar({
         )}
       </SidebarSection>
 
-      {structureCalendars.length > 0 && (
-        <SidebarSection
-          title={t('calendar.structure.calendars', { defaultValue: "Agendas de l'établissement" })}
-        >
-          <ul className="list-unstyled m-0">
-            {structureCalendars.map((c) => (
-              <CalendarRow
-                key={c._id}
-                calendar={c}
-                checked={isVisible(c._id)}
-                onToggle={() => onToggle(c._id)}
-                subtitle={c.owner?.userId === myOwnerId ? undefined : c.owner?.displayName}
-                actions={actionsFor(c)}
-              />
-            ))}
-          </ul>
-        </SidebarSection>
-      )}
+      {/*
+        Sections toujours visibles, même vides (état "Pas d'agenda") — comme les sections
+        sœurs ci-dessous. Les masquer via une condition sur le count est le piège déjà vécu côté
+        AngularJS (cf. mémoire calendar-agendas-etablissement-groupe) : sans section visible, rien
+        n'indique à l'usager que la fonctionnalité existe.
+      */}
+      <SidebarSection
+        title={t('calendar.structure.calendars', { defaultValue: "Agendas de l'établissement" })}
+      >
+        <ul className="list-unstyled m-0">
+          {structureCalendars.length === 0 && <li className="small text-gray-700">{emptyLabel}</li>}
+          {structureCalendars.map((c) => (
+            <CalendarRow
+              key={c._id}
+              calendar={c}
+              checked={isVisible(c._id)}
+              onToggle={() => onToggle(c._id)}
+              subtitle={c.owner?.userId === myOwnerId ? undefined : c.owner?.displayName}
+              actions={actionsFor(c)}
+            />
+          ))}
+        </ul>
+      </SidebarSection>
 
-      {groupCalendars.length > 0 && (
-        <SidebarSection
-          title={t('calendar.group.calendars', { defaultValue: 'Agendas de groupe' })}
-        >
-          <ul className="list-unstyled m-0">
-            {groupCalendars.map((c) => (
-              <CalendarRow
-                key={c._id}
-                calendar={c}
-                checked={isVisible(c._id)}
-                onToggle={() => onToggle(c._id)}
-                subtitle={c.owner?.userId === myOwnerId ? undefined : c.owner?.displayName}
-                actions={actionsFor(c)}
-              />
-            ))}
-          </ul>
-        </SidebarSection>
-      )}
+      <SidebarSection title={t('calendar.group.calendars', { defaultValue: 'Agendas de groupe' })}>
+        <ul className="list-unstyled m-0">
+          {groupCalendars.length === 0 && <li className="small text-gray-700">{emptyLabel}</li>}
+          {groupCalendars.map((c) => (
+            <CalendarRow
+              key={c._id}
+              calendar={c}
+              checked={isVisible(c._id)}
+              onToggle={() => onToggle(c._id)}
+              subtitle={c.owner?.userId === myOwnerId ? undefined : c.owner?.displayName}
+              actions={actionsFor(c)}
+            />
+          ))}
+        </ul>
+      </SidebarSection>
 
       <SidebarSection title={t('calendar.sharedcalendars', { defaultValue: 'Agendas partagés' })}>
         <ul className="list-unstyled m-0">

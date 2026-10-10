@@ -20,6 +20,19 @@ export function weekDays(monday: Date): Date[] {
   });
 }
 
+/**
+ * Les 14 dates de la quinzaine débutant à `monday` (deux semaines lundi→dimanche).
+ * Même cadrage que côté AngularJS (`libs/infra-front/src/ts/calendar.ts`, increment
+ * `fortnight`) : la quinzaine démarre toujours un lundi, comme la semaine.
+ */
+export function fortnightDays(monday: Date): Date[] {
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
 /** Même jour civil (heure locale) qu'une date ISO ? */
 export function isSameDay(iso: string, d: Date): boolean {
   const b = new Date(iso);
@@ -90,23 +103,70 @@ export function isSameMonth(day: Date, ref: Date): boolean {
   return day.getFullYear() === ref.getFullYear() && day.getMonth() === ref.getMonth();
 }
 
+/**
+ * Date civile (heure locale) au format `YYYY-MM-DD` sans heure — format exigé par les endpoints
+ * `edt/.../common/courses` et `rbs/bookings/all` (regex stricte côté serveur pour ce dernier).
+ */
+export function toDateOnly(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * `edt/.../common/courses` renvoie `startDate`/`endDate` en « YYYY-MM-DD HH:mm:ss », une heure
+ * LOCALE (Europe/Paris) sans zone — juste besoin du séparateur ISO pour que `new Date(...)` la
+ * comprenne comme heure locale (comportement par défaut, correct ici).
+ */
+export function parseEdtLocalDateTime(raw: string): string {
+  return raw.replace(' ', 'T');
+}
+
+/**
+ * `rbs/bookings/all` renvoie `start_date`/`end_date` en TIMESTAMP Postgres déjà converti en UTC
+ * au stockage (cf. mémoire bug-fuseau-horaire-edt-import-rbs) mais SANS indicateur de zone — à la
+ * différence d'EDT, le front RBS les traite explicitement en UTC (`moment.utc(...)`, cf.
+ * `calendar-rbs-booking.sniplet.ts`). Sans le suffixe `Z` ajouté ici, `new Date(...)` les
+ * interpréterait à tort comme une heure locale et décalerait l'affichage d'1h/2h.
+ */
+export function parseRbsUtcDateTime(raw: string): string {
+  const isoLike = raw.replace(' ', 'T');
+  return /[zZ]|[+-]\d{2}:?\d{2}$/.test(isoLike) ? isoLike : `${isoLike}Z`;
+}
+
+/**
+ * Le début d'un créneau tombe-t-il réellement dans `[rangeStart, rangeEnd)` ?
+ *
+ * Garde-fou constaté sur l'ENT local (pas documenté côté serveur) : `/rbs/bookings/all`
+ * renvoie AUSSI l'enregistrement « parent » d'une série périodique, dont `start_date` porte la
+ * date de la toute première occurrence (hors de la plage demandée) et `end_date` la date de fin
+ * de la RÉCURRENCE (ex. fin d'année scolaire), pas une heure de fin réelle — un même défaut
+ * existe dans l'Angular (`controller.ts`, aucun filtre), mais il y produit la même incohérence
+ * (créneau affiché à 00:00). Ne garder que les créneaux dont le début tombe réellement dans la
+ * période affichée évite ce bruit, côté EDT comme côté RBS.
+ */
+export function isWithinRange(startIso: string, rangeStart: Date, rangeEnd: Date): boolean {
+  const ms = new Date(startIso).getTime();
+  return ms >= rangeStart.getTime() && ms < rangeEnd.getTime();
+}
+
 /** Couleur CSS d'un calendrier (repli). */
 export function calendarColor(color?: string): string {
   return color && color.trim() ? color : '#2a9cc8';
 }
 
-/** Les quatre vues de l'agenda. */
-export type AgendaView = 'day' | 'week' | 'month' | 'list';
+/** Les cinq vues de l'agenda. */
+export type AgendaView = 'day' | 'week' | 'fortnight' | 'month' | 'list';
 
 /** Jours de la semaine (lundi → dimanche), en entier et en abrégé. */
 export const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 export const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-/** Décale le curseur d'une période (jour, semaine ou mois selon la vue). */
+/** Décale le curseur d'une période (jour, semaine, quinzaine ou mois selon la vue). */
 export function shiftCursor(cursor: Date, view: AgendaView, direction: number): Date {
   const d = new Date(cursor);
   if (view === 'day') d.setDate(d.getDate() + direction);
   else if (view === 'month') d.setMonth(d.getMonth() + direction);
+  else if (view === 'fortnight') d.setDate(d.getDate() + direction * 14);
   else d.setDate(d.getDate() + direction * 7);
   return d;
 }
@@ -124,9 +184,14 @@ export function periodLabel(cursor: Date, view: AgendaView): string {
   if (view === 'month') {
     return cursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   }
-  const days = weekDays(startOfWeek(cursor));
+  const days =
+    view === 'fortnight' ? fortnightDays(startOfWeek(cursor)) : weekDays(startOfWeek(cursor));
   const from = days[0].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
-  const to = days[6].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  const to = days[days.length - 1].toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
   return `${from} – ${to}`;
 }
 
