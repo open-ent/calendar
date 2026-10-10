@@ -529,6 +529,78 @@ export const shareEventBatch = async (eventId: string, batch: ShareBatch): Promi
   if (!res.ok) throw new Error(String(res.status));
 };
 
+// ── Disponibilités (panneau « EDT + RBS » d'un agenda d'établissement) ────────
+// Reprend le principe du service AngularJS `availability.service.ts` : deux endpoints HORS du
+// module calendar (edt, rbs), interrogés en lecture seule pour tout l'établissement en un seul
+// aller-retour par source (pas un par ressource, contrairement à RBS lui-même).
+
+export interface AvailabilityResource {
+  id: number;
+  name: string;
+  typeId: number;
+  typeName: string;
+}
+
+export interface AvailabilitySlot {
+  source: 'edt' | 'rbs';
+  start: string;
+  end: string;
+  label: string;
+  resourceName: string;
+  resourceId: number;
+}
+
+/** Ressources RBS (salles…) de la structure, jointes à leur type — mêmes endpoints que RBS. */
+export const fetchAvailabilityResources = async (
+  structureId: string,
+): Promise<AvailabilityResource[]> => {
+  const [types, resources] = await Promise.all([
+    json<{ id: number; school_id: string; name: string }[]>(await fetch('/rbs/types', base)),
+    json<{ id: number; type_id: number; name: string }[]>(await fetch('/rbs/resources', base)),
+  ]);
+  const typeById = new Map(
+    types.filter((t) => t.school_id === structureId).map((t) => [t.id, t] as const),
+  );
+  return resources
+    .filter((r) => typeById.has(r.type_id))
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      typeId: r.type_id,
+      typeName: typeById.get(r.type_id)!.name,
+    }));
+};
+
+/**
+ * Cours de la structure sur la période (module edt, `CourseController`) — AUCUN filtre
+ * enseignant/groupe. Dates SANS heure (`YYYY-MM-DD`), comme `/room-conflicts` côté RBS.
+ */
+export const fetchAvailabilityCourses = async (
+  structureId: string,
+  startDate: string,
+  endDate: string,
+): Promise<{ startDate: string; endDate: string; roomLabels?: string[] }[]> =>
+  json(
+    await fetch(`/edt/structures/${structureId}/common/courses/${startDate}/${endDate}`, {
+      ...base,
+      method: 'POST',
+      headers: mutHeaders(),
+      body: JSON.stringify({ teacherIds: [], groupIds: [], groupExternalIds: [], groupNames: [] }),
+    }),
+  );
+
+/**
+ * Réservations visibles par l'usager courant (module rbs, `BookingController`), toutes
+ * ressources confondues — mêmes règles de visibilité que partout ailleurs dans RBS. Dates SANS
+ * heure, format strict côté serveur.
+ */
+export const fetchAvailabilityBookings = async (
+  startDate: string,
+  endDate: string,
+): Promise<
+  { resource_id: number; start_date: string; end_date: string; status: number; booking_reason?: string }[]
+> => json(await fetch(`/rbs/bookings/all/${startDate}/${endDate}`, base));
+
 export const api = {
   addExternalCalendar,
   getPreference,
@@ -555,4 +627,7 @@ export const api = {
   shareCalendarBatch,
   getEventShare,
   shareEventBatch,
+  fetchAvailabilityResources,
+  fetchAvailabilityCourses,
+  fetchAvailabilityBookings,
 };

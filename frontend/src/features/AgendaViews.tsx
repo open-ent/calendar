@@ -10,6 +10,7 @@ import {
   DAY_LABELS,
   DAY_SHORT,
   daySpan,
+  fortnightDays,
   isSameDay,
   isSameMonth,
   isoTime,
@@ -105,6 +106,66 @@ export function WeekView({ cursor, events, colorOf, rightsOf, onOpen, onShare, o
                 onDelete={() => onDelete(e)}
               />
             ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Vue Quinzaine : deux semaines lundi → dimanche, en pastilles cliquables — reprend le rendu de
+ * la vue Mois (pas celui de la vue Semaine), comme côté AngularJS où `schedule-fortnight`
+ * réutilise intégralement le CSS `schedule-month` (seule la fenêtre de jours diffère : 14 jours
+ * cadrés sur un lundi au lieu du mois calendaire). La date de chaque cellule est au format
+ * jour/mois (et non juste le quantième) car une quinzaine peut chevaucher deux mois.
+ */
+export function FortnightView({ cursor, events, colorOf, onOpen }: ViewProps) {
+  const { t } = useTranslation(['calendar', 'common']);
+  const today = new Date().toISOString();
+  const maxChips = 3;
+
+  return (
+    <div className="agenda-grid">
+      {DAY_SHORT.map((label) => (
+        <div key={label} className="agenda-weekday small fw-bold text-center py-4">
+          {label}
+        </div>
+      ))}
+      {fortnightDays(startOfWeek(cursor)).map((day) => {
+        const dayEvents = eventsOfDay(events, day);
+        return (
+          <div
+            key={day.toISOString()}
+            className={`agenda-day p-4 ${isSameDay(today, day) ? 'agenda-day--today' : ''}`}
+          >
+            <div className="small text-end">
+              {day.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+            </div>
+            {dayEvents.slice(0, maxChips).map((e) => {
+              const span = daySpan(e.startMoment, e.endMoment, day);
+              return (
+                <button
+                  key={e._id}
+                  type="button"
+                  className="agenda-chip small text-truncate px-4 mb-2"
+                  style={{ '--agenda-color': colorOf(e) } as CSSProperties}
+                  title={e.title}
+                  onClick={() => onOpen(e)}
+                >
+                  {e.allday || span === 'middle' || span === 'end' ? '' : `${isoTime(e.startMoment)} `}
+                  {e.title}
+                </button>
+              );
+            })}
+            {dayEvents.length > maxChips && (
+              <div className="small text-gray-700">
+                {t('calendar.month.more', {
+                  defaultValue: '+[[count]] autre(s)',
+                  count: dayEvents.length - maxChips,
+                })}
+              </div>
+            )}
           </div>
         );
       })}

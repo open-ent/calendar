@@ -867,6 +867,7 @@ public class CalendarController extends MongoDbControllerHelper {
                                 }
                                 JsonObject event = new JsonObject()
                                         .put(Field.TITLE, body.getString("title"))
+                                        .put(Field.LOCATION, body.getString("location"))
                                         .put(Field.STARTMOMENT, DateUtils.dateToString(startDate))
                                         .put(Field.ENDMOMENT, DateUtils.dateToString(endDate))
                                         .put(Field.ALLDAY_LC, false)
