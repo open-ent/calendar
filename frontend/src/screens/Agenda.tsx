@@ -392,6 +392,7 @@ export function Agenda() {
           event={eventDialog.event}
           defaultCalendarId={eventDialog.defaultCalendarId}
           scope={eventDialog.scope}
+          structureId={myStructureId}
           onClose={() => setEventDialog(null)}
         />
       )}

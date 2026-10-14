@@ -156,6 +156,22 @@ export interface EventInput {
   reminders?: EventReminder;
   attachments?: EventAttachment[];
   resources?: EventResource[];
+  /**
+   * Réservation RBS liée à cet événement (pont RbsHelper.saveBookingsInRbs côté serveur, qui crée
+   * réellement la réservation RBS et réécrit `bookings` avec l'id réel avant persistance — même
+   * mécanisme que l'IHM AngularJS, `calendarEvent.bookings` posé par `RbsEmitter.prepareBookingToSave`
+   * avant `.save()`). `hasBooking` sans `bookings` non vide est ignoré côté serveur.
+   */
+  hasBooking?: boolean;
+  bookings?: EventBookingInput[];
+}
+
+/** Une réservation RBS à créer avec l'événement (I1 : un seul créneau, pas de récurrence). */
+export interface EventBookingInput {
+  resource: { id: number };
+  booking_reason: string;
+  quantity: number;
+  slots: { start_date: number; end_date: number; iana: string }[];
 }
 
 // ── Partage (modèle entcore batch, comme forum/rbs) ──────────────────────────
@@ -571,6 +587,25 @@ export const fetchAvailabilityResources = async (
     }));
 };
 
+// ── Réservation RBS depuis le formulaire d'événement (section « Réserver une ressource ») ────
+export interface RbsResourceType {
+  id: number;
+  name: string;
+}
+export interface RbsResource {
+  id: number;
+  name: string;
+  type_id: number;
+}
+
+/** Types de ressources réservables de la structure — `GET /rbs/types?structureid=`. */
+export const fetchRbsResourceTypes = async (structureId: string): Promise<RbsResourceType[]> =>
+  json(await fetch(`/rbs/types?structureid=${structureId}`, base));
+
+/** Ressources d'un type — `GET /rbs/resources?typeid=`. */
+export const fetchRbsResources = async (typeId: number): Promise<RbsResource[]> =>
+  json(await fetch(`/rbs/resources?typeid=${typeId}`, base));
+
 /**
  * Cours de la structure sur la période (module edt, `CourseController`) — AUCUN filtre
  * enseignant/groupe. Dates SANS heure (`YYYY-MM-DD`), comme `/room-conflicts` côté RBS.
@@ -630,4 +665,6 @@ export const api = {
   fetchAvailabilityResources,
   fetchAvailabilityCourses,
   fetchAvailabilityBookings,
+  fetchRbsResourceTypes,
+  fetchRbsResources,
 };

@@ -10,8 +10,8 @@ import {
   useEdificeClient,
   useMediaLibrary,
 } from '@open-ent/react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useId, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -25,7 +25,7 @@ import {
 } from '../api';
 import { addAttachments, addResource, repairAttachment, toAttachment } from '../attachments';
 import { RecurrenceScope } from '../components/RecurrenceScopeModal';
-import { isReminderEnabled } from '../config';
+import { isRbsEnabled, isReminderEnabled } from '../config';
 import { RecurrenceFields } from '../features/RecurrenceFields';
 import { AttachmentFields } from '../features/AttachmentFields';
 import { DescriptionEditor } from '../features/DescriptionEditor';
@@ -51,6 +51,8 @@ export interface EventDialogProps {
    * la série (`POST …/updateAll`).
    */
   scope?: RecurrenceScope;
+  /** Structure de l'usager, pour la section « Réserver une ressource » (RBS). */
+  structureId?: string;
   onClose: () => void;
 }
 
@@ -60,6 +62,7 @@ export function EventDialog({
   event,
   defaultCalendarId,
   scope = 'one',
+  structureId,
   onClose,
 }: EventDialogProps) {
   const { t } = useTranslation(['calendar', 'common']);
@@ -120,6 +123,39 @@ export function EventDialog({
   const [reminder, setReminder] = useState<EventReminder>(
     () => event?.reminders ?? emptyReminder(),
   );
+
+  // Réservation RBS (I1 : création seulement, un seul créneau — pas de récurrence/multi-jours,
+  // pas de délais min/max, pas de conflit EDT : cf. incréments suivants). Le pont serveur
+  // (RbsHelper) n'accepte une réservation qu'à la création d'un événement non récurrent et
+  // tenant sur un seul jour — même règle que `isBookingPossible()` côté AngularJS.
+  const rbsOn = isRbsEnabled() && !!structureId && !editing;
+  const [hasBooking, setHasBooking] = useState(false);
+  const [rbsTypeId, setRbsTypeId] = useState<number | null>(null);
+  const [rbsResourceId, setRbsResourceId] = useState<number | null>(null);
+
+  const rbsTypesQuery = useQuery({
+    queryKey: ['calendar', 'rbs', 'types', structureId],
+    queryFn: () => api.fetchRbsResourceTypes(structureId!),
+    enabled: rbsOn && hasBooking,
+  });
+  const rbsTypes = rbsTypesQuery.data ?? [];
+  const rbsResourcesQuery = useQuery({
+    queryKey: ['calendar', 'rbs', 'resources', rbsTypeId],
+    queryFn: () => api.fetchRbsResources(rbsTypeId!),
+    enabled: rbsOn && hasBooking && rbsTypeId !== null,
+  });
+  const rbsResources = rbsResourcesQuery.data ?? [];
+
+  // Première option auto-sélectionnée dès que la liste arrive, comme `autoSelectResourceType`/
+  // `autoSelectResource` côté AngularJS.
+  useEffect(() => {
+    if (hasBooking && rbsTypeId === null && rbsTypes.length > 0) setRbsTypeId(rbsTypes[0].id);
+  }, [hasBooking, rbsTypeId, rbsTypes]);
+  useEffect(() => {
+    if (hasBooking && rbsResourceId === null && rbsResources.length > 0) {
+      setRbsResourceId(rbsResources[0].id);
+    }
+  }, [hasBooking, rbsResourceId, rbsResources]);
 
   const startDate = useMemo(() => new Date(start), [start]);
   const endDate = useMemo(() => new Date(end), [end]);
@@ -196,6 +232,29 @@ export function EventDialog({
     // re-sérialiser ré-emboîtait `owner.userId` à chaque enregistrement (cf. `flattenOwner`).
     attachments: attachments.map(repairAttachment),
     resources,
+    // Réservation RBS : seulement à la création, un événement non récurrent tenant sur un seul
+    // jour (même condition que `isBookingPossible()` côté AngularJS — le pont serveur l'exige).
+    ...(rbsOn && hasBooking && rbsResourceId !== null && !isRecurrent && datesValid
+      ? {
+          hasBooking: true,
+          bookings: [
+            {
+              resource: { id: rbsResourceId },
+              booking_reason: t('calendar.booking.default.reason', {
+                defaultValue: "Cette réservation a été effectuée depuis l'application Agenda",
+              }),
+              quantity: 1,
+              slots: [
+                {
+                  start_date: Math.floor(startDate.getTime() / 1000),
+                  end_date: Math.floor(endDate.getTime() / 1000),
+                  iana: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                },
+              ],
+            },
+          ],
+        }
+      : {}),
   });
 
   const saveMut = useMutation({
@@ -371,6 +430,83 @@ export function EventDialog({
           <Label>{t('calendar.event.location', { defaultValue: 'Lieu' })}</Label>
           <Input type="text" size="md" value={location} onChange={(e) => setLocation(e.target.value)} />
         </FormControl>
+
+        {rbsOn && (
+          <fieldset className="border-0 p-0 m-0 mb-16">
+            <Checkbox
+              label={t('calendar.booking.title', { defaultValue: 'Réservation de ressources' })}
+              checked={hasBooking}
+              onChange={(e) => setHasBooking(e.target.checked)}
+            />
+            {hasBooking && (
+              <div className="mt-8">
+                <div className="mb-16">
+                  <label className="form-label" htmlFor="booking-type">
+                    {t('calendar.booking.type', { defaultValue: 'Type de ressource' })}
+                  </label>
+                  {rbsTypes.length > 0 ? (
+                    <select
+                      id="booking-type"
+                      className="form-select"
+                      value={rbsTypeId ?? ''}
+                      onChange={(e) => {
+                        setRbsTypeId(Number(e.target.value));
+                        setRbsResourceId(null);
+                      }}
+                    >
+                      {rbsTypes.map((rt) => (
+                        <option key={rt.id} value={rt.id}>
+                          {rt.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Alert type="warning">
+                      {t('calendar.booking.no.types', {
+                        defaultValue: "Aucun type de ressources disponible à la réservation pour cet établissement",
+                      })}
+                    </Alert>
+                  )}
+                </div>
+                {rbsTypes.length > 0 && (
+                  <div className="mb-16">
+                    <label className="form-label" htmlFor="booking-resource">
+                      {t('calendar.booking.resource', { defaultValue: 'Ressource' })}
+                    </label>
+                    {rbsResources.length > 0 ? (
+                      <select
+                        id="booking-resource"
+                        className="form-select"
+                        value={rbsResourceId ?? ''}
+                        onChange={(e) => setRbsResourceId(Number(e.target.value))}
+                      >
+                        {rbsResources.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Alert type="warning">
+                        {t('calendar.booking.no.resources', {
+                          defaultValue: 'Aucune ressource disponible à la réservation pour ce type',
+                        })}
+                      </Alert>
+                    )}
+                  </div>
+                )}
+                {(isRecurrent || !isOneDayEvent(startDate, endDate)) && (
+                  <Alert type="warning">
+                    {t('calendar.booking.conditions', {
+                      defaultValue:
+                        'La réservation de ressource ne peut porter que sur un événement non récurrent, sur une seule journée.',
+                    })}
+                  </Alert>
+                )}
+              </div>
+            )}
+          </fieldset>
+        )}
 
         <fieldset className="border-0 p-0 m-0 mb-16">
           <AttachmentFields
