@@ -135,6 +135,50 @@ export function parseRbsUtcDateTime(raw: string): string {
 }
 
 /**
+ * `GET /rbs/resource/:id/bookings` renvoie des dates déjà formatées par Postgres `to_char`, sous
+ * DEUX formats possibles selon la requête SQL d'origine : « DD/MM/YY HH:mm » (ex. création d'une
+ * réservation) ou le format ISO-sans-zone de `parseRbsUtcDateTime` ci-dessus. Les deux
+ * représentent une heure UTC (même mémoire bug-fuseau-horaire-edt-import-rbs). Accepte les deux
+ * pour rester robuste au format réellement renvoyé par cet endpoint précis.
+ */
+export function parseRbsBookingDate(raw: string): string {
+  const ddmmyy = raw.match(/^(\d{2})\/(\d{2})\/(\d{2})[ T](\d{2}):(\d{2})$/);
+  if (ddmmyy) {
+    const [, dd, mm, yy, hh, min] = ddmmyy;
+    return `20${yy}-${mm}-${dd}T${hh}:${min}:00Z`;
+  }
+  return parseRbsUtcDateTime(raw);
+}
+
+/**
+ * Quantité encore disponible d'une ressource RBS sur un créneau donné : quantité totale moins la
+ * somme des réservations existantes qui chevauchent ce créneau (statut REFUSÉE=3 exclu).
+ * Version simplifiée de `AvailabilityUtil.getTimeslotQuantityAvailable` côté AngularJS : ne gère
+ * pas les ressources avec fenêtres de disponibilité ponctuelle (`is_available: false` — rare,
+ * resource normalement indisponible sauf créneaux exceptionnels) — ce cas renvoie 0 ici.
+ */
+export function rbsAvailableQuantity(
+  resource: { quantity: number | null; is_available: boolean },
+  bookings: { status: number; quantity: number; start_date: string; end_date: string }[],
+  startIso: string,
+  endIso: string,
+): number {
+  if (!resource.is_available) return 0;
+  const total = resource.quantity ?? 0;
+  const startMs = new Date(startIso).getTime();
+  const endMs = new Date(endIso).getTime();
+  const used = bookings
+    .filter((b) => b.status !== 3)
+    .filter((b) => {
+      const bStart = new Date(parseRbsBookingDate(b.start_date)).getTime();
+      const bEnd = new Date(parseRbsBookingDate(b.end_date)).getTime();
+      return bStart < endMs && bEnd > startMs;
+    })
+    .reduce((sum, b) => sum + b.quantity, 0);
+  return total - used;
+}
+
+/**
  * Le début d'un créneau tombe-t-il réellement dans `[rangeStart, rangeEnd)` ?
  *
  * Garde-fou constaté sur l'ENT local (pas documenté côté serveur) : `/rbs/bookings/all`

@@ -12,7 +12,9 @@ import {
   monthGrid,
   occupiesDay,
   parseEdtLocalDateTime,
+  parseRbsBookingDate,
   parseRbsUtcDateTime,
+  rbsAvailableQuantity,
   periodLabel,
   readableCause,
   recurrenceSummary,
@@ -188,6 +190,45 @@ describe('disponibilités (panneau EDT + RBS)', () => {
     // Borne de fin exclusive.
     expect(isWithinRange('2026-10-12T00:00:00Z', weekStart, weekEnd)).toBe(false);
     expect(isWithinRange('2026-10-11T20:00:00Z', weekStart, weekEnd)).toBe(true);
+  });
+});
+
+describe('réservation RBS depuis le formulaire d’événement (I2 : disponibilité)', () => {
+  it('parseRbsBookingDate comprend le format "DD/MM/YY HH:mm"', () => {
+    expect(parseRbsBookingDate('19/10/26 07:00')).toBe('2026-10-19T07:00:00Z');
+    expect(new Date(parseRbsBookingDate('19/10/26 07:00')).getUTCHours()).toBe(7);
+  });
+
+  it('parseRbsBookingDate comprend aussi le format ISO sans zone', () => {
+    expect(parseRbsBookingDate('2026-10-19T07:00:00.000')).toBe('2026-10-19T07:00:00.000Z');
+  });
+
+  it('rbsAvailableQuantity : aucune réservation existante, tout est disponible', () => {
+    const resource = { quantity: 3, is_available: true };
+    expect(rbsAvailableQuantity(resource, [], '2026-10-19T07:00:00Z', '2026-10-19T08:00:00Z')).toBe(3);
+  });
+
+  it('rbsAvailableQuantity : déduit les réservations qui chevauchent le créneau', () => {
+    const resource = { quantity: 3, is_available: true };
+    const bookings = [
+      { status: 2, quantity: 1, start_date: '19/10/26 07:00', end_date: '19/10/26 08:00' }, // chevauche
+      { status: 2, quantity: 1, start_date: '19/10/26 09:00', end_date: '19/10/26 10:00' }, // ne chevauche pas
+      { status: 3, quantity: 2, start_date: '19/10/26 07:00', end_date: '19/10/26 08:00' }, // refusée, ignorée
+    ];
+    expect(
+      rbsAvailableQuantity(resource, bookings, '2026-10-19T07:00:00Z', '2026-10-19T08:00:00Z'),
+    ).toBe(2);
+  });
+
+  it('rbsAvailableQuantity : une ressource "is_available: false" (fenêtres ponctuelles, non géré) renvoie 0', () => {
+    expect(
+      rbsAvailableQuantity(
+        { quantity: 3, is_available: false },
+        [],
+        '2026-10-19T07:00:00Z',
+        '2026-10-19T08:00:00Z',
+      ),
+    ).toBe(0);
   });
 });
 

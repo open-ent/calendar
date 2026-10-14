@@ -596,6 +596,11 @@ export interface RbsResource {
   id: number;
   name: string;
   type_id: number;
+  quantity: number | null;
+  is_available: boolean;
+  /** Délais en secondes (cf. `BookingDelayUtil` côté Angular) — `null` = pas de contrainte. */
+  min_delay: number | null;
+  max_delay: number | null;
 }
 
 /** Types de ressources réservables de la structure — `GET /rbs/types?structureid=`. */
@@ -605,6 +610,16 @@ export const fetchRbsResourceTypes = async (structureId: string): Promise<RbsRes
 /** Ressources d'un type — `GET /rbs/resources?typeid=`. */
 export const fetchRbsResources = async (typeId: number): Promise<RbsResource[]> =>
   json(await fetch(`/rbs/resources?typeid=${typeId}`, base));
+
+/**
+ * Réservations déjà posées sur une ressource (toutes dates confondues — comme
+ * `autoSelectResource()` côté AngularJS, qui charge tout `resource.bookings` une fois pour
+ * calculer la disponibilité localement, plutôt qu'un endpoint de comptage par créneau).
+ */
+export const fetchRbsResourceBookings = async (
+  resourceId: number,
+): Promise<{ id: number; status: number; quantity: number; start_date: string; end_date: string }[]> =>
+  json(await fetch(`/rbs/resource/${resourceId}/bookings`, base));
 
 /**
  * Cours de la structure sur la période (module edt, `CourseController`) — AUCUN filtre
@@ -667,4 +682,5 @@ export const api = {
   fetchAvailabilityBookings,
   fetchRbsResourceTypes,
   fetchRbsResources,
+  fetchRbsResourceBookings,
 };

@@ -40,7 +40,12 @@ import {
   occurrences,
   Recurrence,
 } from '../recurrence';
-import { isoUtcToLocalInput, localInputToIsoUtc, recurrenceSummary } from '../utils';
+import {
+  isoUtcToLocalInput,
+  localInputToIsoUtc,
+  rbsAvailableQuantity,
+  recurrenceSummary,
+} from '../utils';
 
 export interface EventDialogProps {
   calendars: Calendar[];
@@ -164,6 +169,36 @@ export function EventDialog({
     !Number.isNaN(endDate.getTime()) &&
     endDate.getTime() > startDate.getTime();
 
+  // I2 : disponibilité (quantité) et délais min/max de la ressource choisie, sur le créneau de
+  // l'événement — même logique que `isResourceQuantityValid`/`bookingDelaysValid` côté AngularJS,
+  // simplifiée (cf. `rbsAvailableQuantity`).
+  const rbsResource = rbsResources.find((r) => r.id === rbsResourceId) ?? null;
+  const rbsBookingsQuery = useQuery({
+    queryKey: ['calendar', 'rbs', 'bookings', rbsResourceId],
+    queryFn: () => api.fetchRbsResourceBookings(rbsResourceId!),
+    enabled: rbsOn && hasBooking && rbsResourceId !== null,
+  });
+  const rbsAvailable =
+    rbsResource && datesValid
+      ? rbsAvailableQuantity(
+          rbsResource,
+          rbsBookingsQuery.data ?? [],
+          startDate.toISOString(),
+          endDate.toISOString(),
+        )
+      : null;
+  const rbsQuantityOk = rbsAvailable === null || rbsAvailable >= 1;
+
+  const nowSeconds = Date.now() / 1000;
+  const delaySeconds = datesValid ? startDate.getTime() / 1000 - nowSeconds : 0;
+  const rbsMinDelayOk =
+    !rbsResource?.min_delay || !datesValid || delaySeconds > rbsResource.min_delay;
+  const rbsMaxDelayOk =
+    !rbsResource?.max_delay || !datesValid || delaySeconds < rbsResource.max_delay;
+
+  const rbsBookingValid =
+    !rbsOn || !hasBooking || (rbsQuantityOk && rbsMinDelayOk && rbsMaxDelayOk);
+
   // Un événement partagé ne peut pas devenir récurrent (parité AngularJS : la récurrence
   // dupliquerait l'événement sans dupliquer ses partages).
   const sharingBlocksRecurrence = (event?.shared?.length ?? 0) > 0;
@@ -234,7 +269,7 @@ export function EventDialog({
     resources,
     // Réservation RBS : seulement à la création, un événement non récurrent tenant sur un seul
     // jour (même condition que `isBookingPossible()` côté AngularJS — le pont serveur l'exige).
-    ...(rbsOn && hasBooking && rbsResourceId !== null && !isRecurrent && datesValid
+    ...(rbsOn && hasBooking && rbsResourceId !== null && !isRecurrent && datesValid && rbsBookingValid
       ? {
           hasBooking: true,
           bookings: [
@@ -297,6 +332,23 @@ export function EventDialog({
     }
     if (reminderError) {
       setFormError(reminderError);
+      return;
+    }
+    if (hasBooking && (isRecurrent || !isOneDayEvent(startDate, endDate))) {
+      setFormError(
+        t('calendar.booking.conditions', {
+          defaultValue:
+            'La réservation de ressource ne peut porter que sur un événement non récurrent, sur une seule journée.',
+        }),
+      );
+      return;
+    }
+    if (hasBooking && !rbsBookingValid) {
+      setFormError(
+        t('calendar.booking.invalid', {
+          defaultValue: 'La réservation demandée ne respecte pas les règles de la ressource (disponibilité ou délai).',
+        }),
+      );
       return;
     }
     setFormError('');
@@ -502,6 +554,41 @@ export function EventDialog({
                         'La réservation de ressource ne peut porter que sur un événement non récurrent, sur une seule journée.',
                     })}
                   </Alert>
+                )}
+                {rbsResource && datesValid && !isRecurrent && isOneDayEvent(startDate, endDate) && (
+                  <>
+                    {rbsAvailable !== null && (
+                      <Alert type={rbsQuantityOk ? 'info' : 'warning'} className="mt-8">
+                        {rbsQuantityOk
+                          ? t('calendar.booking.quantity.available', {
+                              defaultValue: '[[available]] disponible(s) sur [[total]]',
+                              available: rbsAvailable,
+                              total: rbsResource.quantity ?? 0,
+                            })
+                          : t('calendar.booking.quantity.none', {
+                              defaultValue: 'Aucune disponibilité pour ce créneau.',
+                            })}
+                      </Alert>
+                    )}
+                    {!rbsMinDelayOk && (
+                      <Alert type="warning" className="mt-8">
+                        {t('calendar.booking.min.delay', {
+                          defaultValue:
+                            "Cette ressource doit être réservée au moins [[days]] jour(s) à l'avance.",
+                          days: Math.ceil((rbsResource.min_delay ?? 0) / 86400),
+                        })}
+                      </Alert>
+                    )}
+                    {!rbsMaxDelayOk && (
+                      <Alert type="warning" className="mt-8">
+                        {t('calendar.booking.max.delay', {
+                          defaultValue:
+                            'Cette ressource ne peut pas être réservée plus de [[days]] jour(s) à l\'avance.',
+                          days: Math.floor((rbsResource.max_delay ?? 0) / 86400),
+                        })}
+                      </Alert>
+                    )}
+                  </>
                 )}
               </div>
             )}
