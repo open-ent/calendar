@@ -45,6 +45,7 @@ import {
   localInputToIsoUtc,
   rbsAvailableQuantity,
   recurrenceSummary,
+  toLocalDateTimeSeconds,
 } from '../utils';
 
 export interface EventDialogProps {
@@ -198,6 +199,31 @@ export function EventDialog({
 
   const rbsBookingValid =
     !rbsOn || !hasBooking || (rbsQuantityOk && rbsMinDelayOk && rbsMaxDelayOk);
+
+  // I3 : avertissement non bloquant si la salle est déjà prise par un cours de l'Emploi du
+  // temps (même patron que `checkEdtRoomConflict` côté AngularJS — jamais utilisé pour refuser
+  // la réservation, seulement pour prévenir).
+  const edtConflictQuery = useQuery({
+    queryKey: [
+      'calendar',
+      'rbs',
+      'edt-conflict',
+      structureId,
+      rbsResource?.name,
+      datesValid ? startDate.toISOString() : null,
+      datesValid ? endDate.toISOString() : null,
+    ],
+    queryFn: () =>
+      api.fetchEdtRoomConflicts(
+        structureId!,
+        toLocalDateTimeSeconds(startDate),
+        toLocalDateTimeSeconds(endDate),
+        rbsResource!.name,
+      ),
+    enabled: rbsOn && hasBooking && !!rbsResource && datesValid && !isRecurrent && isOneDayEvent(startDate, endDate),
+    retry: false,
+  });
+  const edtConflict = (edtConflictQuery.data?.length ?? 0) > 0;
 
   // Un événement partagé ne peut pas devenir récurrent (parité AngularJS : la récurrence
   // dupliquerait l'événement sans dupliquer ses partages).
@@ -585,6 +611,15 @@ export function EventDialog({
                           defaultValue:
                             'Cette ressource ne peut pas être réservée plus de [[days]] jour(s) à l\'avance.',
                           days: Math.floor((rbsResource.max_delay ?? 0) / 86400),
+                        })}
+                      </Alert>
+                    )}
+                    {edtConflict && (
+                      <Alert type="warning" className="mt-8">
+                        {t('calendar.booking.edt.conflict', {
+                          defaultValue:
+                            "Attention : la salle [[room]] est déjà occupée par un cours de l'emploi du temps sur ce créneau.",
+                          room: rbsResource.name,
                         })}
                       </Alert>
                     )}

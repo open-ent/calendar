@@ -114,6 +114,15 @@ export function toDateOnly(d: Date): string {
 }
 
 /**
+ * Date-heure civile (heure locale) au format `YYYY-MM-DDTHH:mm:ss` — format attendu par
+ * `/edt/structures/:id/room-conflicts/:start/:end` (I3), sens inverse de `parseEdtLocalDateTime`.
+ */
+export function toLocalDateTimeSeconds(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${toDateOnly(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/**
  * `edt/.../common/courses` renvoie `startDate`/`endDate` en « YYYY-MM-DD HH:mm:ss », une heure
  * LOCALE (Europe/Paris) sans zone — juste besoin du séparateur ISO pour que `new Date(...)` la
  * comprenne comme heure locale (comportement par défaut, correct ici).

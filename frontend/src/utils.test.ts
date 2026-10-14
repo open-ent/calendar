@@ -21,6 +21,7 @@ import {
   shiftCursor,
   startOfWeek,
   toDateOnly,
+  toLocalDateTimeSeconds,
   weekDays,
 } from './utils';
 
@@ -151,6 +152,10 @@ describe('disponibilités (panneau EDT + RBS)', () => {
   it('toDateOnly formate en YYYY-MM-DD, zéro-paddé', () => {
     expect(toDateOnly(new Date(2026, 0, 5))).toBe('2026-01-05');
     expect(toDateOnly(new Date(2026, 10, 18))).toBe('2026-11-18');
+  });
+
+  it('toLocalDateTimeSeconds formate en YYYY-MM-DDTHH:mm:ss, zéro-paddé', () => {
+    expect(toLocalDateTimeSeconds(new Date(2026, 0, 5, 9, 5, 3))).toBe('2026-01-05T09:05:03');
   });
 
   // `edt/.../common/courses` renvoie une heure LOCALE sans zone — `new Date(...)` doit la

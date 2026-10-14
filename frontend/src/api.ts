@@ -622,6 +622,25 @@ export const fetchRbsResourceBookings = async (
   json(await fetch(`/rbs/resource/${resourceId}/bookings`, base));
 
 /**
+ * Avertissement non bloquant (I3, même patron que `checkEdtRoomConflict` côté AngularJS) : une
+ * salle déjà occupée par un cours de l'Emploi du temps sur ce créneau n'empêche jamais la
+ * réservation — corrélation par NOM exact entre la ressource RBS et les salles EDT. `start`/`end`
+ * en heure locale, format `YYYY-MM-DDTHH:mm:ss` (comme `parseEdtLocalDateTime`, sens inverse).
+ */
+export const fetchEdtRoomConflicts = async (
+  structureId: string,
+  start: string,
+  end: string,
+  roomName: string,
+): Promise<unknown[]> =>
+  json(
+    await fetch(
+      `/edt/structures/${structureId}/room-conflicts/${start}/${end}?room=${encodeURIComponent(roomName)}`,
+      base,
+    ),
+  );
+
+/**
  * Cours de la structure sur la période (module edt, `CourseController`) — AUCUN filtre
  * enseignant/groupe. Dates SANS heure (`YYYY-MM-DD`), comme `/room-conflicts` côté RBS.
  */
@@ -683,4 +702,5 @@ export const api = {
   fetchRbsResourceTypes,
   fetchRbsResources,
   fetchRbsResourceBookings,
+  fetchEdtRoomConflicts,
 };

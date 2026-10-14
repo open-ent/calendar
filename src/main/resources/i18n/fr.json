@@ -33,6 +33,7 @@
   "calendar.booking.quantity.none": "Aucune disponibilité pour ce créneau.",
   "calendar.booking.min.delay": "Cette ressource doit être réservée au moins [[days]] jour(s) à l'avance.",
   "calendar.booking.max.delay": "Cette ressource ne peut pas être réservée plus de [[days]] jour(s) à l'avance.",
+  "calendar.booking.edt.conflict": "Attention : la salle [[room]] est déjà occupée par un cours de l'emploi du temps sur ce créneau.",
   "calendar.calendar.view": "Calendaire",
   "calendar.calendars.empty": "Pas d'agenda",
   "calendar.color": "Couleur de l'agenda",
