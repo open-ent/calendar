@@ -591,6 +591,9 @@ export const fetchAvailabilityResources = async (
 export interface RbsResourceType {
   id: number;
   name: string;
+  /** Id du profil de créneaux de la structure (`GET /rbs/slotprofiles/schools/:id`) — `null` si le
+   *  type n'impose pas de créneaux fixes (I5, cf. `handleBookingSlots` côté AngularJS). */
+  slotprofile: string | null;
 }
 export interface RbsResource {
   id: number;
@@ -617,6 +620,25 @@ export const fetchRbsResources = async (typeId: number): Promise<RbsResource[]> 
  */
 export const fetchRbsResource = async (resourceId: number): Promise<RbsResource> =>
   json(await fetch(`/rbs/resource/${resourceId}`, base));
+
+export interface RbsSlot {
+  id: string;
+  name: string;
+  startHour: string;
+  endHour: string;
+}
+
+/**
+ * Créneaux fixes d'un profil (I5) — `GET /rbs/slotprofiles/:id/slots`. Quand le type de la
+ * ressource réservée impose un profil, la réservation doit s'aligner sur l'un de ces créneaux
+ * plutôt que sur l'horaire exact de l'événement (cf. `handleBookingSlots` côté AngularJS).
+ */
+export const fetchSlotProfileSlots = async (slotProfileId: string): Promise<RbsSlot[]> => {
+  const { slots } = await json<{ slots: RbsSlot[] }>(
+    await fetch(`/rbs/slotprofiles/${slotProfileId}/slots`, base),
+  );
+  return slots;
+};
 
 /**
  * Réservations déjà posées sur une ressource (toutes dates confondues — comme
@@ -709,6 +731,7 @@ export const api = {
   fetchRbsResourceTypes,
   fetchRbsResources,
   fetchRbsResource,
+  fetchSlotProfileSlots,
   fetchRbsResourceBookings,
   fetchEdtRoomConflicts,
 };

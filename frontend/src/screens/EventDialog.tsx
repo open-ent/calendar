@@ -26,6 +26,7 @@ import {
 import { addAttachments, addResource, repairAttachment, toAttachment } from '../attachments';
 import { RecurrenceScope } from '../components/RecurrenceScopeModal';
 import { isRbsEnabled, isReminderEnabled } from '../config';
+import { dateLocale } from '../locale';
 import { RecurrenceFields } from '../features/RecurrenceFields';
 import { AttachmentFields } from '../features/AttachmentFields';
 import { DescriptionEditor } from '../features/DescriptionEditor';
@@ -46,6 +47,7 @@ import {
   localInputToIsoUtc,
   rbsAvailableQuantity,
   recurrenceSummary,
+  snapToSlotProfile,
   toLocalDateTimeSeconds,
 } from '../utils';
 
@@ -199,19 +201,36 @@ export function EventDialog({
     queryFn: () => api.fetchRbsResourceBookings(rbsResourceId!),
     enabled: rbsOn && hasBooking && rbsResourceId !== null,
   });
+
+  // I5 : certains types imposent une grille de créneaux fixes (ex. les heures de cours d'un
+  // établissement) — la réservation s'aligne alors sur le créneau qui englobe l'horaire de
+  // l'événement, plutôt que de réserver exactement cet horaire (`handleBookingSlots` côté
+  // AngularJS). Toutes les vérifications (I2, I3) et l'enregistrement portent sur cet horaire
+  // aligné, pas sur l'horaire brut de l'événement.
+  const rbsType = rbsTypes.find((t) => t.id === rbsTypeId) ?? null;
+  const slotProfileQuery = useQuery({
+    queryKey: ['calendar', 'rbs', 'slotprofile', rbsType?.slotprofile],
+    queryFn: () => api.fetchSlotProfileSlots(rbsType!.slotprofile!),
+    enabled: rbsOn && hasBooking && !!rbsType?.slotprofile,
+  });
+  const { start: bookingStartDate, end: bookingEndDate } =
+    datesValid && slotProfileQuery.data
+      ? snapToSlotProfile(startDate, endDate, slotProfileQuery.data)
+      : { start: startDate, end: endDate };
+
   const rbsAvailable =
     rbsResource && datesValid
       ? rbsAvailableQuantity(
           rbsResource,
           rbsBookingsQuery.data ?? [],
-          startDate.toISOString(),
-          endDate.toISOString(),
+          bookingStartDate.toISOString(),
+          bookingEndDate.toISOString(),
         )
       : null;
   const rbsQuantityOk = rbsAvailable === null || rbsAvailable >= 1;
 
   const nowSeconds = Date.now() / 1000;
-  const delaySeconds = datesValid ? startDate.getTime() / 1000 - nowSeconds : 0;
+  const delaySeconds = datesValid ? bookingStartDate.getTime() / 1000 - nowSeconds : 0;
   const rbsMinDelayOk =
     !rbsResource?.min_delay || !datesValid || delaySeconds > rbsResource.min_delay;
   const rbsMaxDelayOk =
@@ -238,14 +257,14 @@ export function EventDialog({
       'edt-conflict',
       structureId,
       rbsResource?.name,
-      datesValid ? startDate.toISOString() : null,
-      datesValid ? endDate.toISOString() : null,
+      datesValid ? bookingStartDate.toISOString() : null,
+      datesValid ? bookingEndDate.toISOString() : null,
     ],
     queryFn: () =>
       api.fetchEdtRoomConflicts(
         structureId!,
-        toLocalDateTimeSeconds(startDate),
-        toLocalDateTimeSeconds(endDate),
+        toLocalDateTimeSeconds(bookingStartDate),
+        toLocalDateTimeSeconds(bookingEndDate),
         rbsResource!.name,
       ),
     enabled: rbsOn && hasBooking && !!rbsResource && datesValid && !isRecurrent && isOneDayEvent(startDate, endDate),
@@ -335,8 +354,8 @@ export function EventDialog({
               quantity: 1,
               slots: [
                 {
-                  start_date: Math.floor(startDate.getTime() / 1000),
-                  end_date: Math.floor(endDate.getTime() / 1000),
+                  start_date: Math.floor(bookingStartDate.getTime() / 1000),
+                  end_date: Math.floor(bookingEndDate.getTime() / 1000),
                   iana: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 },
               ],
@@ -636,6 +655,24 @@ export function EventDialog({
                 )}
                 {rbsResource && datesValid && !isRecurrent && isOneDayEvent(startDate, endDate) && (
                   <>
+                    {slotProfileQuery.data &&
+                      (bookingStartDate.getTime() !== startDate.getTime() ||
+                        bookingEndDate.getTime() !== endDate.getTime()) && (
+                        <Alert type="info" className="mt-8">
+                          {t('calendar.booking.slot.aligned', {
+                            defaultValue:
+                              'Cette ressource se réserve par créneau : la réservation portera sur [[start]] – [[end]].',
+                            start: bookingStartDate.toLocaleTimeString(dateLocale(), {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }),
+                            end: bookingEndDate.toLocaleTimeString(dateLocale(), {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }),
+                          })}
+                        </Alert>
+                      )}
                     {rbsAvailable !== null && (
                       <Alert type={rbsQuantityOk ? 'info' : 'warning'} className="mt-8">
                         {rbsQuantityOk

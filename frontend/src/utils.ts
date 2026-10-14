@@ -1,3 +1,4 @@
+import { RbsSlot } from './api';
 import { dateLocale } from './locale';
 import { Recurrence } from './recurrence';
 
@@ -117,6 +118,47 @@ export function toDateOnly(d: Date): string {
  * Date-heure civile (heure locale) au format `YYYY-MM-DDTHH:mm:ss` — format attendu par
  * `/edt/structures/:id/room-conflicts/:start/:end` (I3), sens inverse de `parseEdtLocalDateTime`.
  */
+/**
+ * Aligne une réservation sur les créneaux fixes d'un profil (I5) : le créneau retenu au début est
+ * celui dont l'heure de début est la PLUS TARDIVE parmi celles ≤ au début de l'événement, et au
+ * bout celui dont l'heure de fin est la PLUS PRÉCOCE parmi celles ≥ à la fin de l'événement — même
+ * logique que `handleBookingSlots` côté AngularJS. Si l'horaire de l'événement déborde de tous les
+ * créneaux du profil (avant le premier ou après le dernier), on renonce à l'alignement plutôt que
+ * de planter (contrairement à l'original, qui plante alors sur un `.split()` de `undefined`).
+ */
+export function snapToSlotProfile(start: Date, end: Date, slots: RbsSlot[]): { start: Date; end: Date } {
+  const toMinutes = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  };
+  const startMinutes = start.getHours() * 60 + start.getMinutes();
+  const endMinutes = end.getHours() * 60 + end.getMinutes();
+
+  let closestStart: RbsSlot | null = null;
+  let closestEnd: RbsSlot | null = null;
+  for (const slot of slots) {
+    const slotStart = toMinutes(slot.startHour);
+    const slotEnd = toMinutes(slot.endHour);
+    if (slotStart <= startMinutes && (!closestStart || slotStart > toMinutes(closestStart.startHour))) {
+      closestStart = slot;
+    }
+    if (slotEnd >= endMinutes && (!closestEnd || slotEnd < toMinutes(closestEnd.endHour))) {
+      closestEnd = slot;
+    }
+  }
+  if (!closestStart || !closestEnd) return { start, end };
+
+  const [sh, sm] = closestStart.startHour.split(':').map(Number);
+  const snappedStart = new Date(start);
+  snappedStart.setHours(sh, sm, 0, 0);
+
+  const [eh, em] = closestEnd.endHour.split(':').map(Number);
+  const snappedEnd = new Date(end);
+  snappedEnd.setHours(eh, em, 0, 0);
+
+  return { start: snappedStart, end: snappedEnd };
+}
+
 export function toLocalDateTimeSeconds(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${toDateOnly(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;

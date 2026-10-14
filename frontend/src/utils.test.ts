@@ -19,6 +19,7 @@ import {
   readableCause,
   recurrenceSummary,
   shiftCursor,
+  snapToSlotProfile,
   startOfWeek,
   toDateOnly,
   toLocalDateTimeSeconds,
@@ -325,5 +326,40 @@ describe('recurrenceSummary', () => {
       t,
     );
     expect(summary).toBe("Tous les jours · jusqu'au 12/12/2026");
+  });
+});
+
+describe('réservation RBS depuis le formulaire d’événement (I5 : profils de créneaux)', () => {
+  const slots = [
+    { id: 'm1', name: 'M1', startHour: '07:00', endHour: '08:00' },
+    { id: 'm2', name: 'M2', startHour: '08:00', endHour: '09:00' },
+    { id: 'm3', name: 'M3', startHour: '09:00', endHour: '10:00' },
+    { id: 'm4', name: 'M4', startHour: '10:00', endHour: '11:00' },
+  ];
+
+  it('aligne un horaire tombant au milieu de deux créneaux sur leurs bornes englobantes', () => {
+    const start = new Date(2026, 9, 19, 8, 30);
+    const end = new Date(2026, 9, 19, 9, 30);
+    const result = snapToSlotProfile(start, end, slots);
+    expect(result.start.getHours()).toBe(8);
+    expect(result.start.getMinutes()).toBe(0);
+    expect(result.end.getHours()).toBe(10);
+    expect(result.end.getMinutes()).toBe(0);
+  });
+
+  it('ne modifie rien quand l’horaire coïncide déjà avec des bornes de créneaux', () => {
+    const start = new Date(2026, 9, 19, 9, 0);
+    const end = new Date(2026, 9, 19, 10, 0);
+    const result = snapToSlotProfile(start, end, slots);
+    expect(result.start.getTime()).toBe(start.getTime());
+    expect(result.end.getTime()).toBe(end.getTime());
+  });
+
+  it('renonce à l’alignement quand l’horaire déborde de tous les créneaux du profil', () => {
+    const start = new Date(2026, 9, 19, 6, 0);
+    const end = new Date(2026, 9, 19, 12, 0);
+    const result = snapToSlotProfile(start, end, slots);
+    expect(result.start.getTime()).toBe(start.getTime());
+    expect(result.end.getTime()).toBe(end.getTime());
   });
 });
