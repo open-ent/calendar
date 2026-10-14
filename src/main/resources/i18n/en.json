@@ -34,6 +34,7 @@
   "calendar.booking.min.delay": "This resource must be booked at least [[days]] day(s) in advance.",
   "calendar.booking.max.delay": "This resource cannot be booked more than [[days]] day(s) in advance.",
   "calendar.booking.edt.conflict": "Warning: room [[room]] is already occupied by a timetable course at this time slot.",
+  "calendar.booking.multiday.warning": "Spreading this event over several days will not change the existing booking, which stays on its original time slot.",
   "calendar.calendar.view": "Calendar",
   "calendar.calendars.empty": "No calendar",
   "calendar.color": "Calendar color",

@@ -1,8 +1,9 @@
 import { Alert, Button, Modal, Radio } from '@open-ent/react';
 import { useId, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
-import { CalendarEvent } from '../api';
+import { api, CalendarEvent } from '../api';
 import { RecurrenceScope } from '../components/RecurrenceScopeModal';
 import { formatBookingDate } from '../utils';
 
@@ -43,6 +44,21 @@ export function DeleteEventModal({
   const concerned = scope === 'all' ? series : [event];
   const bookings = concerned.flatMap((e) => e.bookings ?? []);
   const hasBookings = bookings.length > 0;
+
+  // Le serveur ne joint que `resource_id` à chaque réservation : un appel par ressource distincte
+  // pour afficher son nom (même limitation que le résumé en lecture seule d'EventDialog, I4).
+  const bookingResourceIds = [
+    ...new Set(bookings.map((b) => b.resource_id).filter((id): id is number => id != null)),
+  ];
+  const bookingResourceQueries = useQueries({
+    queries: bookingResourceIds.map((id) => ({
+      queryKey: ['calendar', 'rbs', 'resource', id],
+      queryFn: () => api.fetchRbsResource(id),
+    })),
+  });
+  const bookingResourceNames = new Map(
+    bookingResourceIds.map((id, i) => [id, bookingResourceQueries[i]?.data?.name]),
+  );
 
   const ready = scope !== null && (!hasBookings || deleteBookings !== null);
 
@@ -97,7 +113,9 @@ export function DeleteEventModal({
             <ul className="small text-gray-700">
               {bookings.map((b) => (
                 <li key={b.id}>
-                  {b.resource?.name ? `${b.resource.name} — ` : ''}
+                  {b.resource_id != null && bookingResourceNames.get(b.resource_id)
+                    ? `${bookingResourceNames.get(b.resource_id)} — `
+                    : ''}
                   {formatBookingDate(b.start_date)}
                   {b.end_date ? ` → ${formatBookingDate(b.end_date)}` : ''}
                 </li>

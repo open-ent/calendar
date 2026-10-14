@@ -10,7 +10,7 @@ import {
   useEdificeClient,
   useMediaLibrary,
 } from '@open-ent/react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,6 +41,7 @@ import {
   Recurrence,
 } from '../recurrence';
 import {
+  formatBookingDate,
   isoUtcToLocalInput,
   localInputToIsoUtc,
   rbsAvailableQuantity,
@@ -139,6 +140,25 @@ export function EventDialog({
   const [rbsTypeId, setRbsTypeId] = useState<number | null>(null);
   const [rbsResourceId, setRbsResourceId] = useState<number | null>(null);
 
+  // I4 : résumé en lecture seule des réservations déjà posées, en édition (pas de ré-sélection
+  // de ressource ici — le pont serveur `syncBookingsOnUpdate` ne gère qu'un diff par id, modifier
+  // la ressource depuis ce formulaire sortirait du périmètre de cet incrément).
+  const existingBookings = isRbsEnabled() ? (event?.bookings ?? []) : [];
+  const existingBookingResourceIds = [
+    ...new Set(existingBookings.map((b) => b.resource_id).filter((id): id is number => id != null)),
+  ];
+  // Le serveur ne joint que `resource_id` à chaque réservation : un appel par ressource distincte
+  // pour en afficher le nom dans le résumé.
+  const existingBookingResourceQueries = useQueries({
+    queries: existingBookingResourceIds.map((id) => ({
+      queryKey: ['calendar', 'rbs', 'resource', id],
+      queryFn: () => api.fetchRbsResource(id),
+    })),
+  });
+  const existingBookingResourceNames = new Map(
+    existingBookingResourceIds.map((id, i) => [id, existingBookingResourceQueries[i]?.data?.name]),
+  );
+
   const rbsTypesQuery = useQuery({
     queryKey: ['calendar', 'rbs', 'types', structureId],
     queryFn: () => api.fetchRbsResourceTypes(structureId!),
@@ -199,6 +219,14 @@ export function EventDialog({
 
   const rbsBookingValid =
     !rbsOn || !hasBooking || (rbsQuantityOk && rbsMinDelayOk && rbsMaxDelayOk);
+
+  // I4 : la réservation ne suit l'événement qu'occurrence par occurrence (`syncBookingsOnUpdate`
+  // diffuse par id, pas par créneau) — avertir, sans bloquer, si l'édition étale l'événement sur
+  // plusieurs jours alors qu'une réservation existe déjà (même avertissement que
+  // `recurrenceOrMultidaysAdded` côté AngularJS, réduit au cas multi-jours : la récurrence n'est
+  // pas éditable depuis ce formulaire).
+  const multidayWithBookingWarning =
+    existingBookings.length > 0 && datesValid && !isOneDayEvent(startDate, endDate);
 
   // I3 : avertissement non bloquant si la salle est déjà prise par un cours de l'Emploi du
   // temps (même patron que `checkEdtRoomConflict` côté AngularJS — jamais utilisé pour refuser
@@ -508,6 +536,31 @@ export function EventDialog({
           <Label>{t('calendar.event.location', { defaultValue: 'Lieu' })}</Label>
           <Input type="text" size="md" value={location} onChange={(e) => setLocation(e.target.value)} />
         </FormControl>
+
+        {existingBookings.length > 0 && (
+          <fieldset className="border-0 p-0 m-0 mb-16">
+            <p className="form-label mb-8">
+              {t('calendar.booking.title', { defaultValue: 'Réservation de ressources' })}
+            </p>
+            <ul className="list-unstyled m-0">
+              {existingBookings.map((b) => (
+                <li key={b.id} className="small text-gray-700">
+                  {(b.resource_id != null && existingBookingResourceNames.get(b.resource_id)) ?? '—'}
+                  {b.start_date && ` — ${formatBookingDate(b.start_date)}`}
+                  {b.end_date && ` → ${formatBookingDate(b.end_date)}`}
+                </li>
+              ))}
+            </ul>
+            {multidayWithBookingWarning && (
+              <Alert type="warning" className="mt-8">
+                {t('calendar.booking.multiday.warning', {
+                  defaultValue:
+                    "Étaler cet événement sur plusieurs jours ne modifiera pas la réservation existante, qui reste sur son créneau d'origine.",
+                })}
+              </Alert>
+            )}
+          </fieldset>
+        )}
 
         {rbsOn && (
           <fieldset className="border-0 p-0 m-0 mb-16">

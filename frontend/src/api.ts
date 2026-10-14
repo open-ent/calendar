@@ -40,7 +40,7 @@ export interface EventBooking {
   id: number;
   start_date?: string;
   end_date?: string;
-  resource?: { name?: string };
+  resource_id?: number;
 }
 
 /**
@@ -612,6 +612,13 @@ export const fetchRbsResources = async (typeId: number): Promise<RbsResource[]> 
   json(await fetch(`/rbs/resources?typeid=${typeId}`, base));
 
 /**
+ * Une ressource par id — `GET /rbs/resource/:id`. Sert à retrouver le nom d'une ressource déjà
+ * réservée (I4) : le serveur ne renvoie que `resource_id` sur chaque réservation d'un événement.
+ */
+export const fetchRbsResource = async (resourceId: number): Promise<RbsResource> =>
+  json(await fetch(`/rbs/resource/${resourceId}`, base));
+
+/**
  * Réservations déjà posées sur une ressource (toutes dates confondues — comme
  * `autoSelectResource()` côté AngularJS, qui charge tout `resource.bookings` une fois pour
  * calculer la disponibilité localement, plutôt qu'un endpoint de comptage par créneau).
@@ -701,6 +708,7 @@ export const api = {
   fetchAvailabilityBookings,
   fetchRbsResourceTypes,
   fetchRbsResources,
+  fetchRbsResource,
   fetchRbsResourceBookings,
   fetchEdtRoomConflicts,
 };
