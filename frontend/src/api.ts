@@ -203,7 +203,21 @@ function xsrfHeader(): Record<string, string> {
 }
 
 async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(String(res.status));
+  if (!res.ok) {
+    // Certaines erreurs (ex. `calendar.booking.right.denied`, I6) portent une clé i18n dans
+    // `{error: "..."}` (cf. `Renders.badRequest(request, message)` côté serveur) — on la préfère
+    // au code HTTP brut quand elle est là, pour que l'appelant puisse la distinguer.
+    let message = String(res.status);
+    try {
+      const body: unknown = await res.json();
+      if (body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string') {
+        message = (body as { error: string }).error;
+      }
+    } catch {
+      // corps non JSON ou vide : on garde le code de statut
+    }
+    throw new Error(message);
+  }
   const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
 }
@@ -699,6 +713,60 @@ export const fetchAvailabilityBookings = async (
   { resource_id: number; start_date: string; end_date: string; status: number; booking_reason?: string }[]
 > => json(await fetch(`/rbs/bookings/all/${startDate}/${endDate}`, base));
 
+// ── Propositions de réservation RBS sur un agenda partagé (I6) ─────────────────────────────────
+// Quand l'auteur d'un événement n'est pas propriétaire de l'agenda visé, une réservation RBS ne se
+// crée jamais directement : elle part en proposition PENDING que le propriétaire doit valider
+// (cf. BookingProposalController, CalendarController#updateBookingRights côté serveur).
+export interface BookingProposal {
+  _id: string;
+  calendarId: string;
+  eventId: string;
+  proposedBy: { userId: string; displayName: string };
+  owner: { userId: string; displayName: string };
+  bookingPayload: { resource: { id: number }; booking_reason: string; quantity: number }[];
+  status: 'PENDING' | 'ACCEPTED' | 'REFUSED';
+  refusalReason?: string;
+  created: string;
+  modified: string;
+}
+
+export const fetchBookingProposalsByEvent = async (eventId: string): Promise<BookingProposal[]> =>
+  json(await fetch(`/calendar/booking-proposal/by-event/${eventId}`, base));
+
+export const processBookingProposal = async (
+  id: string,
+  status: 'ACCEPTED' | 'REFUSED',
+  refusalReason?: string,
+): Promise<void> => {
+  const res = await fetch(`/calendar/booking-proposal/${id}/process`, {
+    ...base,
+    method: 'PUT',
+    headers: mutHeaders(),
+    body: JSON.stringify({ status, refusalReason }),
+  });
+  if (!res.ok) throw new Error(String(res.status));
+};
+
+export interface BookingRightCollaborator {
+  userId: string;
+  displayName: string;
+  hasBookingRight: boolean;
+}
+
+/** `GET /calendar/:id/booking-rights` — réservé au propriétaire (`calendar.manager`). */
+export const fetchBookingRights = async (calendarId: string): Promise<BookingRightCollaborator[]> =>
+  json(await fetch(`/calendar/${calendarId}/booking-rights`, base));
+
+export const updateBookingRights = async (calendarId: string, userIds: string[]): Promise<void> => {
+  const res = await fetch(`/calendar/${calendarId}/booking-rights`, {
+    ...base,
+    method: 'PUT',
+    headers: mutHeaders(),
+    body: JSON.stringify({ userIds, groupIds: [] }),
+  });
+  if (!res.ok) throw new Error(String(res.status));
+};
+
 export const api = {
   addExternalCalendar,
   getPreference,
@@ -734,4 +802,8 @@ export const api = {
   fetchSlotProfileSlots,
   fetchRbsResourceBookings,
   fetchEdtRoomConflicts,
+  fetchBookingProposalsByEvent,
+  processBookingProposal,
+  fetchBookingRights,
+  updateBookingRights,
 };

@@ -76,7 +76,8 @@ export function EventDialog({
 }: EventDialogProps) {
   const { t } = useTranslation(['calendar', 'common']);
   const qc = useQueryClient();
-  const { appCode } = useEdificeClient();
+  const { appCode, user } = useEdificeClient();
+  const myUserId = (user as { userId?: string } | undefined)?.userId ?? '';
   const editing = !!event;
 
   const [title, setTitle] = useState(event?.title ?? '');
@@ -146,11 +147,27 @@ export function EventDialog({
   // de ressource ici — le pont serveur `syncBookingsOnUpdate` ne gère qu'un diff par id, modifier
   // la ressource depuis ce formulaire sortirait du périmètre de cet incrément).
   const existingBookings = isRbsEnabled() ? (event?.bookings ?? []) : [];
+
+  // I6 : réservations proposées sur un agenda partagé qui n'appartient pas à l'auteur — jamais
+  // créées directement dans RBS tant que le propriétaire de l'agenda ne les a pas validées (cf.
+  // BookingProposalController côté serveur). On les charge dès l'édition d'un événement existant,
+  // quel que soit le rôle de l'usager courant (auteur de la proposition, propriétaire approbateur,
+  // ou simple collaborateur avec un droit de lecture sur l'événement).
+  const proposalsQuery = useQuery({
+    queryKey: ['calendar', 'rbs', 'proposals', event?._id],
+    queryFn: () => api.fetchBookingProposalsByEvent(event!._id),
+    enabled: isRbsEnabled() && editing && !!event?._id,
+  });
+  const proposals = proposalsQuery.data ?? [];
+
   const existingBookingResourceIds = [
-    ...new Set(existingBookings.map((b) => b.resource_id).filter((id): id is number => id != null)),
+    ...new Set([
+      ...existingBookings.map((b) => b.resource_id),
+      ...proposals.flatMap((p) => p.bookingPayload.map((b) => b.resource.id)),
+    ].filter((id): id is number => id != null)),
   ];
-  // Le serveur ne joint que `resource_id` à chaque réservation : un appel par ressource distincte
-  // pour en afficher le nom dans le résumé.
+  // Le serveur ne joint que `resource_id` à chaque réservation (ou chaque proposition) : un appel
+  // par ressource distincte pour en afficher le nom.
   const existingBookingResourceQueries = useQueries({
     queries: existingBookingResourceIds.map((id) => ({
       queryKey: ['calendar', 'rbs', 'resource', id],
@@ -160,6 +177,16 @@ export function EventDialog({
   const existingBookingResourceNames = new Map(
     existingBookingResourceIds.map((id, i) => [id, existingBookingResourceQueries[i]?.data?.name]),
   );
+
+  const processProposalMut = useMutation({
+    mutationFn: ({ id, status, refusalReason }: { id: string; status: 'ACCEPTED' | 'REFUSED'; refusalReason?: string }) =>
+      api.processBookingProposal(id, status, refusalReason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['calendar', 'rbs', 'proposals', event?._id] });
+      qc.invalidateQueries({ queryKey: ['calendar', 'events'] });
+    },
+  });
+  const [refusalDraft, setRefusalDraft] = useState<Record<string, string>>({});
 
   const rbsTypesQuery = useQuery({
     queryKey: ['calendar', 'rbs', 'types', structureId],
@@ -384,8 +411,21 @@ export function EventDialog({
       qc.invalidateQueries({ queryKey: ['calendar', 'events'] });
       onClose();
     },
-    onError: () =>
-      setFormError(t('calendar.event.error', { defaultValue: "L'enregistrement a échoué." })),
+    onError: (err: Error) => {
+      // I6 : droit de réservation absent sur un agenda partagé qui n'appartient pas à l'auteur —
+      // blocage total côté serveur (cf. `extractPendingBookingProposal`), message dédié plutôt que
+      // l'erreur générique.
+      if (err.message === 'calendar.booking.right.denied') {
+        setFormError(
+          t('calendar.booking.right.denied', {
+            defaultValue:
+              "Vous n'avez pas le droit d'associer une réservation de ressource sur cet agenda. Demandez-le à son propriétaire, ou décochez la réservation.",
+          }),
+        );
+        return;
+      }
+      setFormError(t('calendar.event.error', { defaultValue: "L'enregistrement a échoué." }));
+    },
   });
 
   const onSave = () => {
@@ -578,6 +618,114 @@ export function EventDialog({
                 })}
               </Alert>
             )}
+          </fieldset>
+        )}
+
+        {proposals.length > 0 && (
+          <fieldset className="border-0 p-0 m-0 mb-16">
+            <p className="form-label mb-8">
+              {t('calendar.booking.proposal.title', {
+                defaultValue: 'Proposition de réservation sur agenda partagé',
+              })}
+            </p>
+            <ul className="list-unstyled m-0 d-flex flex-column gap-12">
+              {proposals.map((p) => {
+                const isApprover = !!myUserId && p.owner.userId === myUserId;
+                const isProposer = !!myUserId && p.proposedBy.userId === myUserId;
+                return (
+                  <li key={p._id} className="small">
+                    <ul className="list-unstyled m-0 text-gray-700">
+                      {p.bookingPayload.map((b, i) => (
+                        <li key={i}>{existingBookingResourceNames.get(b.resource.id) ?? '—'}</li>
+                      ))}
+                    </ul>
+                    {p.status === 'PENDING' && isApprover && (
+                      <div className="mt-4">
+                        <Alert type="info" className="mb-8">
+                          {t('calendar.booking.proposal.pending.approver', {
+                            defaultValue: '[[name]] propose cette réservation sur votre agenda.',
+                            name: p.proposedBy.displayName,
+                          })}
+                        </Alert>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm mb-8"
+                          placeholder={t('calendar.booking.proposal.refusal.reason', {
+                            defaultValue: 'Motif de refus (optionnel)',
+                          })}
+                          value={refusalDraft[p._id] ?? ''}
+                          onChange={(e) =>
+                            setRefusalDraft((d) => ({ ...d, [p._id]: e.target.value }))
+                          }
+                        />
+                        <div className="d-flex gap-8">
+                          <Button
+                            type="button"
+                            color="primary"
+                            variant="filled"
+                            size="sm"
+                            isLoading={processProposalMut.isPending}
+                            onClick={() => processProposalMut.mutate({ id: p._id, status: 'ACCEPTED' })}
+                          >
+                            {t('calendar.booking.proposal.accept', { defaultValue: 'Accepter' })}
+                          </Button>
+                          <Button
+                            type="button"
+                            color="danger"
+                            variant="outline"
+                            size="sm"
+                            isLoading={processProposalMut.isPending}
+                            onClick={() =>
+                              processProposalMut.mutate({
+                                id: p._id,
+                                status: 'REFUSED',
+                                refusalReason: refusalDraft[p._id] || undefined,
+                              })
+                            }
+                          >
+                            {t('calendar.booking.proposal.refuse', { defaultValue: 'Refuser' })}
+                          </Button>
+                        </div>
+                        {processProposalMut.isError && processProposalMut.variables?.id === p._id && (
+                          <Alert type="warning" className="mt-8">
+                            {t('calendar.error', { defaultValue: 'Une erreur est survenue.' })}
+                          </Alert>
+                        )}
+                      </div>
+                    )}
+                    {p.status === 'PENDING' && !isApprover && (
+                      <Alert type="info">
+                        {isProposer
+                          ? t('calendar.booking.proposal.pending.proposer', {
+                              defaultValue:
+                                'Votre réservation est en attente de validation par [[name]].',
+                              name: p.owner.displayName,
+                            })
+                          : t('calendar.booking.proposal.pending.other', {
+                              defaultValue: 'Réservation en attente de validation par [[name]].',
+                              name: p.owner.displayName,
+                            })}
+                      </Alert>
+                    )}
+                    {p.status === 'ACCEPTED' && (
+                      <Alert type="info">
+                        {t('calendar.booking.proposal.accepted', { defaultValue: 'Réservation acceptée.' })}
+                      </Alert>
+                    )}
+                    {p.status === 'REFUSED' && (
+                      <Alert type="warning">
+                        {p.refusalReason
+                          ? t('calendar.booking.proposal.refused.reason', {
+                              defaultValue: 'Réservation refusée : [[reason]]',
+                              reason: p.refusalReason,
+                            })
+                          : t('calendar.booking.proposal.refused', { defaultValue: 'Réservation refusée.' })}
+                      </Alert>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </fieldset>
         )}
 

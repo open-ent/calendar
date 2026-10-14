@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ShareAction, ShareBatch, ShareJson } from '../api';
+import { api, ShareAction, ShareBatch, ShareJson } from '../api';
 
 /** Niveaux de droit (ordre croissant) — communs agenda / événement. */
 const LEVELS = [
@@ -36,6 +36,8 @@ export function ShareDialog({
   title,
   getShare,
   shareBatch,
+  /** Seul un agenda porte le droit de réservation RBS granulaire (I6) — jamais un événement. */
+  showBookingRights = false,
   onClose,
 }: {
   resourceId: string;
@@ -43,6 +45,7 @@ export function ShareDialog({
   title: string;
   getShare: (id: string) => Promise<ShareJson>;
   shareBatch: (id: string, batch: ShareBatch) => Promise<void>;
+  showBookingRights?: boolean;
   onClose: () => void;
 }) {
   const { t } = useTranslation(['calendar', 'common']);
@@ -51,6 +54,28 @@ export function ShareDialog({
     queryKey: ['calendar', 'share', resourceId],
     queryFn: () => getShare(resourceId),
   });
+
+  // I6 : droit de partage granulaire « associer une réservation RBS » — hors du modèle entcore
+  // générique ci-dessus (limité à 5 rôles figés, cf. mémoire openent-shareroles-5-roles-figes),
+  // donc affiché à part, sous le tableau de partage (même agencement que le panneau AngularJS).
+  const bookingRightsQuery = useQuery({
+    queryKey: ['calendar', 'booking-rights', resourceId],
+    queryFn: () => api.fetchBookingRights(resourceId),
+    enabled: showBookingRights,
+  });
+  const bookingRightsMut = useMutation({
+    mutationFn: (userIds: string[]) => api.updateBookingRights(resourceId, userIds),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['calendar', 'booking-rights', resourceId] }),
+  });
+  const toggleBookingRight = (userId: string) => {
+    const collaborators = bookingRightsQuery.data ?? [];
+    const granted = new Set(
+      collaborators.filter((c) => c.hasBookingRight).map((c) => c.userId),
+    );
+    if (granted.has(userId)) granted.delete(userId);
+    else granted.add(userId);
+    bookingRightsMut.mutate([...granted]);
+  };
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
@@ -242,6 +267,33 @@ export function ShareDialog({
               <Alert type="warning" className="mt-16">
                 {t('calendar.error', { defaultValue: 'Une erreur est survenue.' })}
               </Alert>
+            )}
+
+            {showBookingRights && (bookingRightsQuery.data?.length ?? 0) > 0 && (
+              <div className="mt-16">
+                <p className="text-gray-700 mb-8">
+                  {t('calendar.booking.right.hint', {
+                    defaultValue:
+                      "Cochez un collaborateur pour qu'il puisse proposer une réservation de ressource sur cet agenda — la réservation ne sera effective qu'après votre validation.",
+                  })}
+                </p>
+                <table className="table align-middle">
+                  <tbody>
+                    {bookingRightsQuery.data!.map((c) => (
+                      <tr key={c.userId}>
+                        <td>{c.displayName}</td>
+                        <td className="text-end">
+                          <Checkbox
+                            checked={c.hasBookingRight}
+                            aria-label={`${c.displayName} — ${t('calendar.booking.right.hint.short', { defaultValue: 'Droit de réservation' })}`}
+                            onChange={() => toggleBookingRight(c.userId)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </>
         )}

@@ -425,6 +425,7 @@ export function Agenda() {
           title={shareDialog.title}
           getShare={shareDialog.kind === 'calendar' ? api.getCalendarShare : api.getEventShare}
           shareBatch={shareDialog.kind === 'calendar' ? api.shareCalendarBatch : api.shareEventBatch}
+          showBookingRights={shareDialog.kind === 'calendar'}
           onClose={() => setShareDialog(null)}
         />
       )}
