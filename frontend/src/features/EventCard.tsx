@@ -4,6 +4,7 @@ import { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CalendarEvent } from '../api';
+import { dateLocale } from '../locale';
 import { EventRights } from '../rights';
 import { DaySpan, isoTime } from '../utils';
 
@@ -66,7 +67,7 @@ export function EventCard({
     }
   })();
 
-  const date = new Date(event.startMoment).toLocaleDateString('fr-FR', {
+  const date = new Date(event.startMoment).toLocaleDateString(dateLocale(), {
     weekday: 'long',
     day: '2-digit',
     month: 'long',

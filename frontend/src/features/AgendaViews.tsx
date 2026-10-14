@@ -5,10 +5,9 @@ import { useTranslation } from 'react-i18next';
 import illuAgenda from '@images/emptyscreen/illu-homeworks.svg';
 
 import { CalendarEvent } from '../api';
+import { dateLocale, dayLabels, dayShort } from '../locale';
 import { EventRights } from '../rights';
 import {
-  DAY_LABELS,
-  DAY_SHORT,
   daySpan,
   fortnightDays,
   isSameDay,
@@ -91,7 +90,7 @@ export function WeekView({ cursor, events, colorOf, rightsOf, onOpen, onShare, o
             className={`agenda-day agenda-day--week p-8 ${isSameDay(today, day) ? 'agenda-day--today' : ''}`}
           >
             <div className="small fw-bold mb-8">
-              {DAY_LABELS[i]} {day.getDate()}
+              {dayLabels()[i]} {day.getDate()}
             </div>
             {dayEvents.map((e) => (
               <EventCard
@@ -127,7 +126,7 @@ export function FortnightView({ cursor, events, colorOf, onOpen }: ViewProps) {
 
   return (
     <div className="agenda-grid">
-      {DAY_SHORT.map((label) => (
+      {dayShort().map((label) => (
         <div key={label} className="agenda-weekday small fw-bold text-center py-4">
           {label}
         </div>
@@ -140,7 +139,7 @@ export function FortnightView({ cursor, events, colorOf, onOpen }: ViewProps) {
             className={`agenda-day p-4 ${isSameDay(today, day) ? 'agenda-day--today' : ''}`}
           >
             <div className="small text-end">
-              {day.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+              {day.toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' })}
             </div>
             {dayEvents.slice(0, maxChips).map((e) => {
               const span = daySpan(e.startMoment, e.endMoment, day);
@@ -181,7 +180,7 @@ export function MonthView({ cursor, events, colorOf, onOpen }: ViewProps) {
 
   return (
     <div className="agenda-grid">
-      {DAY_SHORT.map((label) => (
+      {dayShort().map((label) => (
         <div key={label} className="agenda-weekday small fw-bold text-center py-4">
           {label}
         </div>

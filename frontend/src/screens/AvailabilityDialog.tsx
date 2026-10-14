@@ -5,6 +5,7 @@ import { useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { api, AvailabilityResource, AvailabilitySlot } from '../api';
+import { dateLocale } from '../locale';
 import {
   isWithinRange,
   parseEdtLocalDateTime,
@@ -246,8 +247,8 @@ export function AvailabilityDialog({
           </button>
           <span className="fw-bold">
             {mode === 'week'
-              ? weekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-              : pickedDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              ? weekStart.toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })
+              : pickedDate.toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </span>
           <button
             type="button"
@@ -280,16 +281,16 @@ export function AvailabilityDialog({
                 <tr key={`${slot.source}-${slot.resourceId}-${slot.start}-${i}`}>
                   {selectedResourceId === 'ALL' && <td>{slot.resourceName}</td>}
                   <td>
-                    {new Date(slot.start).toLocaleDateString('fr-FR', {
+                    {new Date(slot.start).toLocaleDateString(dateLocale(), {
                       weekday: 'long',
                       day: '2-digit',
                       month: '2-digit',
                     })}
                   </td>
                   <td>
-                    {new Date(slot.start).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(slot.start).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })}
                     {' - '}
-                    {new Date(slot.end).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(slot.end).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td>{slot.label}</td>
                 </tr>

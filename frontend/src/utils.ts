@@ -1,3 +1,4 @@
+import { dateLocale } from './locale';
 import { Recurrence } from './recurrence';
 
 /** Fonctions pures du module Calendar (testables). */
@@ -39,20 +40,20 @@ export function isSameDay(iso: string, d: Date): boolean {
   return b.getFullYear() === d.getFullYear() && b.getMonth() === d.getMonth() && b.getDate() === d.getDate();
 }
 
-/** Heure « HH:mm » (locale FR) d'une date ISO. */
+/** Heure « HH:mm » (locale de la session) d'une date ISO. */
 export function isoTime(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
-/** Date+heure « jj/mm/aaaa hh:mm » (locale FR) d'une date ISO. */
+/** Date+heure « jj/mm/aaaa hh:mm » (locale de la session) d'une date ISO. */
 export function formatDateTime(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? ''
-    : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    : d.toLocaleString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 /**
@@ -157,10 +158,6 @@ export function calendarColor(color?: string): string {
 /** Les cinq vues de l'agenda. */
 export type AgendaView = 'day' | 'week' | 'fortnight' | 'month' | 'list';
 
-/** Jours de la semaine (lundi → dimanche), en entier et en abrégé. */
-export const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-export const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-
 /** Décale le curseur d'une période (jour, semaine, quinzaine ou mois selon la vue). */
 export function shiftCursor(cursor: Date, view: AgendaView, direction: number): Date {
   const d = new Date(cursor);
@@ -174,7 +171,7 @@ export function shiftCursor(cursor: Date, view: AgendaView, direction: number): 
 /** Libellé de la période affichée, selon la vue. */
 export function periodLabel(cursor: Date, view: AgendaView): string {
   if (view === 'day') {
-    return cursor.toLocaleDateString('fr-FR', {
+    return cursor.toLocaleDateString(dateLocale(), {
       weekday: 'long',
       day: '2-digit',
       month: 'long',
@@ -182,12 +179,12 @@ export function periodLabel(cursor: Date, view: AgendaView): string {
     });
   }
   if (view === 'month') {
-    return cursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    return cursor.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
   }
   const days =
     view === 'fortnight' ? fortnightDays(startOfWeek(cursor)) : weekDays(startOfWeek(cursor));
-  const from = days[0].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
-  const to = days[days.length - 1].toLocaleDateString('fr-FR', {
+  const from = days[0].toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' });
+  const to = days[days.length - 1].toLocaleDateString(dateLocale(), {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -314,7 +311,7 @@ export function recurrenceSummary(
     const date = new Date(recurrence.end_on);
     if (!Number.isNaN(date.getTime())) {
       parts.push(
-        `${translate('calendar.recurrence.until', { defaultValue: "jusqu'au" })} ${date.toLocaleDateString('fr-FR')}`,
+        `${translate('calendar.recurrence.until', { defaultValue: "jusqu'au" })} ${date.toLocaleDateString(dateLocale())}`,
       );
     }
   }
