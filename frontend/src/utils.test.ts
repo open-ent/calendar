@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   dateRangeError,
+  eventTooltip,
   daySpan,
   fortnightDays,
   isMultiDay,
@@ -375,5 +376,27 @@ describe('dateRangeError', () => {
   });
   it('dates courantes → null', () => {
     expect(dateRangeError(new Date(2026, 9, 17, 9), new Date(2026, 9, 17, 10))).toBeNull();
+  });
+});
+
+describe('eventTooltip', () => {
+  const labels = { location: 'Lieu', owner: 'Créé par', recurrent: 'Récurrent', allday: 'Journée' };
+  it('titre, période, lieu et créateur sur des lignes séparées', () => {
+    const lines = eventTooltip(
+      {
+        _id: '1',
+        title: 'Réunion',
+        startMoment: new Date(2026, 9, 17, 9).toISOString(),
+        endMoment: new Date(2026, 9, 17, 10).toISOString(),
+        calendar: ['c'],
+        location: 'Salle 3',
+        owner: { userId: 'u', displayName: 'A. Martin' },
+      },
+      labels,
+    ).split('\n');
+    expect(lines[0]).toBe('Réunion');
+    expect(lines).toContain('Lieu : Salle 3');
+    expect(lines).toContain('Créé par : A. Martin');
+    expect(lines).toHaveLength(4);
   });
 });

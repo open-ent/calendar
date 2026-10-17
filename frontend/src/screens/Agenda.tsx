@@ -1,11 +1,12 @@
 import { AppHeader, Breadcrumb, Button, useEdificeClient, useHasWorkflow } from '@open-ent/react';
 import { IconPlus } from '@open-ent/react/icons';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 
 import { api, Calendar, CalendarEvent } from '../api';
+import { formatDuration, runExternalSync } from '../externalSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { RecurrenceScope, RecurrenceScopeModal } from '../components/RecurrenceScopeModal';
 import { AgendaToolbar } from '../features/AgendaToolbar';
@@ -41,6 +42,7 @@ const EXTERNAL_CALENDAR_COLOR = '#e63b3b';
 type EventDialogState = {
   event?: CalendarEvent;
   defaultCalendarId?: string;
+  defaultStart?: Date;
   scope?: RecurrenceScope;
 } | null;
 /** Édition en attente du choix « cette occurrence / toute la récurrence ». */
@@ -69,6 +71,7 @@ export function Agenda() {
   const canCreateCalendar = useHasWorkflow(WORKFLOW.createCalendar) === true;
   const canCreateStructure = useHasWorkflow(WORKFLOW.createStructureCalendar) === true;
   const canCreateGroup = useHasWorkflow(WORKFLOW.createGroupCalendar) === true;
+  const canSyncExternal = useHasWorkflow(WORKFLOW.syncExternalCalendar) === true;
   const canAddExternal = useHasWorkflow(WORKFLOW.importExternalCalendar) === true;
   const allowedCalendarTypes = useMemo<CalendarType[]>(() => {
     const types: CalendarType[] = [];
@@ -183,25 +186,79 @@ export function Agenda() {
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [scopePrompt, setScopePrompt] = useState<ScopePromptState>(null);
   const [eventToDelete, setEventToDelete] = useState<CalendarEvent | null>(null);
+  // Suppression groupée depuis la vue Liste (plusieurs événements cochés).
+  const [bulkDelete, setBulkDelete] = useState<CalendarEvent[] | null>(null);
 
   // Ajout d'un agenda externe (flux ICS, URL sur liste blanche des plateformes).
   const [addingExternal, setAddingExternal] = useState(false);
   const [externalTitle, setExternalTitle] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
+  const [externalColor, setExternalColor] = useState(EXTERNAL_CALENDAR_COLOR);
   const externalMut = useMutation({
     mutationFn: () =>
       api.addExternalCalendar({
         title: externalTitle.trim(),
-        color: EXTERNAL_CALENDAR_COLOR,
+        color: externalColor,
         icsLink: externalUrl.trim(),
       }),
     onSuccess: () => {
       setAddingExternal(false);
       setExternalTitle('');
       setExternalUrl('');
+      setExternalColor(EXTERNAL_CALENDAR_COLOR);
       qc.invalidateQueries({ queryKey: ['calendar'] });
     },
   });
+
+  // Resynchronisation d'un agenda externe : suivi des agendas en cours et dernier message.
+  const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
+  const [syncMessage, setSyncMessage] = useState<{ kind: 'success' | 'info' | 'error'; text: string } | null>(null);
+  const syncExternal = async (calendar: Calendar) => {
+    setSyncMessage(null);
+    setSyncingIds((prev) => new Set(prev).add(calendar._id));
+    const outcome = await runExternalSync({
+      sync: () => api.syncExternalCalendar(calendar._id),
+      isSyncing: () => api.isExternalSyncing(calendar._id),
+      wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    });
+    setSyncingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(calendar._id);
+      return next;
+    });
+    if (outcome.kind === 'updated') {
+      setSyncMessage({
+        kind: 'success',
+        text: t('calendar.external.updated', {
+          defaultValue: "L'agenda [[title]] a été mis à jour.",
+          title: calendar.title,
+        }),
+      });
+      qc.invalidateQueries({ queryKey: ['calendar'] });
+    } else if (outcome.kind === 'already') {
+      setSyncMessage({
+        kind: 'info',
+        text: outcome.retryAfter
+          ? t('calendar.external.already.retry', {
+              defaultValue: "L'agenda [[title]] a déjà été mis à jour. Il est possible de le mettre à jour toutes les [[duration]].",
+              title: calendar.title,
+              duration: formatDuration(outcome.retryAfter),
+            })
+          : t('calendar.external.already', {
+              defaultValue: "L'agenda [[title]] a déjà été mis à jour.",
+              title: calendar.title,
+            }),
+      });
+    } else {
+      setSyncMessage({
+        kind: 'error',
+        text: t('calendar.external.sync.failed', {
+          defaultValue: "Erreur lors de la mise à jour des événements de l'agenda [[title]].",
+          title: calendar.title,
+        }),
+      });
+    }
+  };
 
   const deleteCalMut = useMutation({
     mutationFn: (id: string) => api.deleteCalendar(id),
@@ -233,6 +290,22 @@ export function Agenda() {
     // dans tous les cas et on laisse le message d'erreur à l'écran.
     onError: () => qc.invalidateQueries({ queryKey: ['calendar', 'events'] }),
   });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (targets: CalendarEvent[]) => {
+      for (const target of targets) await api.deleteEvent(target.calendar[0], target._id);
+    },
+    onSettled: () => {
+      setBulkDelete(null);
+      qc.invalidateQueries({ queryKey: ['calendar', 'events'] });
+    },
+  });
+
+  /** Libellé de l'agenda d'un événement (colonne « Agenda » de la vue Liste). */
+  const calendarTitleOf = useCallback(
+    (e: CalendarEvent) => e.calendar.map((id) => calendarsById.get(id)?.title ?? '').filter(Boolean).join(', '),
+    [calendarsById],
+  );
 
   /** Toutes les occurrences d'une série, retrouvées par `parentId` parmi les événements chargés. */
   const seriesOf = (event: CalendarEvent): CalendarEvent[] =>
@@ -277,6 +350,11 @@ export function Agenda() {
     rightsOf: rightsOfEvent,
     onOpen: openEvent,
     // « +N autre(s) » d'une cellule : on ouvre ce jour-là en vue Jour (ex. 12 oct. surchargé).
+    // Clic sur un créneau libre de la grille horaire : nouvel événement d'une heure à cette heure.
+    onCreateAt: (start: Date) => {
+      const target = writableCalendars.find((c) => isVisible(c._id)) ?? writableCalendars[0];
+      if (target) setEventDialog({ defaultCalendarId: target._id, defaultStart: start });
+    },
     onShowDay: (day: Date) => {
       setCursor(day);
       setView('day');
@@ -352,6 +430,10 @@ export function Agenda() {
           groupCalendars={groupCalendars}
           sharedCalendars={sharedCalendars}
           externalCalendars={externalCalendars}
+          onSyncExternal={syncExternal}
+          syncingIds={syncingIds}
+          syncMessage={syncMessage}
+          canSyncExternal={canSyncExternal}
           isLoading={calendarsQuery.isLoading}
           isVisible={isVisible}
           onToggle={toggle}
@@ -374,6 +456,8 @@ export function Agenda() {
             isPending: externalMut.isPending,
             isError: externalMut.isError,
             canAdd: canAddExternal,
+            color: externalColor,
+            onColorChange: setExternalColor,
             onOpenChange: setAddingExternal,
             onTitleChange: setExternalTitle,
             onUrlChange: setExternalUrl,
@@ -400,7 +484,7 @@ export function Agenda() {
           {view === 'week' && <WeekView {...viewProps} />}
           {view === 'fortnight' && <FortnightView {...viewProps} />}
           {view === 'month' && <MonthView {...viewProps} />}
-          {view === 'list' && <ListView {...viewProps} />}
+          {view === 'list' && <ListView {...viewProps} calendarTitleOf={calendarTitleOf} onDeleteMany={setBulkDelete} />}
         </div>
       </div>
 
@@ -412,6 +496,7 @@ export function Agenda() {
           calendars={writableCalendars}
           event={eventDialog.event}
           defaultCalendarId={eventDialog.defaultCalendarId}
+          defaultStart={eventDialog.defaultStart}
           scope={eventDialog.scope}
           structureId={myStructureId}
           onClose={() => setEventDialog(null)}
@@ -503,6 +588,18 @@ export function Agenda() {
             deleteEventMut.reset();
             setEventToDelete(null);
           }}
+        />
+      )}
+      {bulkDelete && bulkDelete.length > 0 && (
+        <ConfirmModal
+          title={t('calendar.delete.events.title', { defaultValue: 'Supprimer les événements' })}
+          text={t('calendar.delete.events.confirm', {
+            defaultValue: 'Supprimer les [[count]] événements sélectionnés ?',
+            count: bulkDelete.length,
+          })}
+          isLoading={bulkDeleteMut.isPending}
+          onConfirm={() => bulkDeleteMut.mutate(bulkDelete)}
+          onCancel={() => setBulkDelete(null)}
         />
       )}
       {confirmProps && (

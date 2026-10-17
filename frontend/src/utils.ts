@@ -1,4 +1,4 @@
-import { RbsSlot } from './api';
+import { CalendarEvent, RbsSlot } from './api';
 import { dateLocale } from './locale';
 import { Recurrence } from './recurrence';
 
@@ -426,4 +426,24 @@ export function dateRangeError(start: Date, end: Date): 'old' | 'far' | null {
   const limit = new Date(start);
   limit.setFullYear(limit.getFullYear() + MAX_EVENT_YEARS);
   return end.getTime() > limit.getTime() ? 'far' : null;
+}
+
+/**
+ * Texte de l'infobulle d'un événement (parité `tooltip-template.html` AngularJS) : titre, période,
+ * lieu, récurrence et créateur, une information par ligne. Les libellés sont fournis par l'appelant
+ * (traduits).
+ * Ex. « Réunion\n17/10/2026 09:00 – 10:00\nLieu : Salle 3\nCréé par : A. Martin ».
+ */
+export function eventTooltip(
+  e: CalendarEvent,
+  labels: { location: string; owner: string; recurrent: string; allday: string },
+): string {
+  const lines = [e.title];
+  if (e.allday) lines.push(`${formatDateTime(e.startMoment).split(' ')[0]} – ${labels.allday}`);
+  else if (isMultiDay(e.startMoment, e.endMoment)) lines.push(`${formatDateTime(e.startMoment)} → ${formatDateTime(e.endMoment)}`);
+  else lines.push(`${formatDateTime(e.startMoment)} – ${isoTime(e.endMoment)}`);
+  if (e.location) lines.push(`${labels.location} : ${e.location}`);
+  if (e.isRecurrent) lines.push(labels.recurrent);
+  if (e.owner?.displayName) lines.push(`${labels.owner} : ${e.owner.displayName}`);
+  return lines.join('\n');
 }

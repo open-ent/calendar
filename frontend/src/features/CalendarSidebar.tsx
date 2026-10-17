@@ -14,6 +14,7 @@ import {
   IconGlobe,
   IconOptions,
   IconPlus,
+  IconRefresh,
   IconShare,
   IconUpload,
 } from '@open-ent/react/icons';
@@ -21,6 +22,7 @@ import { CSSProperties, FormEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Calendar } from '../api';
+import { dateLocale } from '../locale';
 import { CalendarRights } from '../rights';
 import { calendarColor } from '../utils';
 
@@ -115,6 +117,12 @@ export interface CalendarSidebarProps {
   groupCalendars: Calendar[];
   sharedCalendars: Calendar[];
   externalCalendars: Calendar[];
+  /** Resynchronise un agenda externe ; `syncingIds` = ceux dont la mise à jour est en cours. */
+  onSyncExternal: (calendar: Calendar) => void;
+  syncingIds: Set<string>;
+  /** Dernier résultat d'une resynchronisation (message de l'usager). */
+  syncMessage: { kind: 'success' | 'info' | 'error'; text: string } | null;
+  canSyncExternal: boolean;
   isLoading: boolean;
   isVisible: (id: string) => boolean;
   onToggle: (id: string) => void;
@@ -138,6 +146,7 @@ export interface CalendarSidebarProps {
     isOpen: boolean;
     title: string;
     url: string;
+    color: string;
     isPending: boolean;
     isError: boolean;
     /** Droit d'ajouter un flux externe (même droit de workflow que créer un agenda). */
@@ -145,6 +154,7 @@ export interface CalendarSidebarProps {
     onOpenChange: (open: boolean) => void;
     onTitleChange: (value: string) => void;
     onUrlChange: (value: string) => void;
+    onColorChange: (value: string) => void;
     onSubmit: () => void;
   };
 }
@@ -156,6 +166,10 @@ export function CalendarSidebar({
   groupCalendars,
   sharedCalendars,
   externalCalendars,
+  onSyncExternal,
+  syncingIds,
+  syncMessage,
+  canSyncExternal,
   isLoading,
   isVisible,
   onToggle,
@@ -196,6 +210,16 @@ export function CalendarSidebar({
         onClick: () => onShare(c),
       });
     }
+    if (c.isExternal && canSyncExternal) {
+      actions.push({
+        key: 'sync',
+        label: syncingIds.has(c._id)
+          ? t('calendar.external.syncing', { defaultValue: 'Mise à jour en cours…' })
+          : t('calendar.external.sync', { defaultValue: 'Mettre à jour' }),
+        icon: <IconRefresh />,
+        onClick: () => !syncingIds.has(c._id) && onSyncExternal(c),
+      });
+    }
     if (!c.isExternal) {
       actions.push({
         key: 'export',
@@ -231,6 +255,14 @@ export function CalendarSidebar({
       });
     }
     return actions;
+  };
+
+  /** « dernière mise à jour : 12/10/2026 08:30 » sous le nom d'un agenda externe synchronisé. */
+  const lastUpdateLabel = (c: Calendar): string | undefined => {
+    if (!c.updated) return undefined;
+    const d = new Date(c.updated);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return `${t('calendar.last.update', { defaultValue: 'Dernière mise à jour' })} : ${d.toLocaleString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
   };
 
   const submitExternal = (e: FormEvent) => {
@@ -358,10 +390,20 @@ export function CalendarSidebar({
               calendar={c}
               checked={isVisible(c._id)}
               onToggle={() => onToggle(c._id)}
+              subtitle={lastUpdateLabel(c)}
               actions={actionsFor(c)}
             />
           ))}
         </ul>
+        {syncMessage && (
+          <p
+            className={`small mt-8 mb-0 ${syncMessage.kind === 'error' ? 'text-danger' : 'text-gray-700'}`}
+            role="status"
+            data-calendar-sync-message
+          >
+            {syncMessage.text}
+          </p>
+        )}
 
         {externalForm.isOpen && (
           <form className="mt-12 d-flex flex-column gap-8" onSubmit={submitExternal}>
@@ -381,6 +423,15 @@ export function CalendarSidebar({
                 size="sm"
                 value={externalForm.url}
                 onChange={(e) => externalForm.onUrlChange(e.target.value)}
+              />
+            </FormControl>
+            <FormControl id="external-color">
+              <Label>{t('calendar.color', { defaultValue: "Couleur de l'agenda" })}</Label>
+              <input
+                type="color"
+                className="form-control form-control-color"
+                value={externalForm.color}
+                onChange={(e) => externalForm.onColorChange(e.target.value)}
               />
             </FormControl>
             {externalForm.isError && (

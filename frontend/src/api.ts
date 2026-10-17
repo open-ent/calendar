@@ -31,6 +31,8 @@ export interface Calendar {
   type?: string;
   /** Publication sur le portail public (flux ICS anonyme GET /calendar/pub/:id/events.ics). */
   portalPublished?: boolean;
+  /** Agenda externe : date (ISO) de la dernière synchronisation du flux. */
+  updated?: string;
 }
 
 /**
@@ -265,6 +267,32 @@ export const addExternalCalendar = async (data: { title: string; color: string; 
     body: JSON.stringify({ ...data, isExternal: true }),
   });
   if (!res.ok) throw new Error(String(res.status));
+};
+
+/** Erreur de synchro d'un agenda externe : `status` 401 = déjà à jour, `retryAfter` en secondes. */
+export class ExternalSyncError extends Error {
+  constructor(
+    public status: number,
+    public retryAfter?: number,
+  ) {
+    super(`sync ${status}`);
+  }
+}
+
+/** Demande la resynchronisation d'un agenda externe (PUT /calendar/:id/url). */
+export const syncExternalCalendar = async (id: string): Promise<void> => {
+  const res = await fetch(`/calendar/${id}/url`, { ...base, method: 'PUT', headers: mutHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ExternalSyncError(res.status, Number(body?.error) || undefined);
+  }
+};
+
+/** La synchronisation est-elle encore en cours ? (GET /calendar/:id/url → { isUpdating }) */
+export const isExternalSyncing = async (id: string): Promise<boolean> => {
+  const res = await fetch(`/calendar/${id}/url`, { ...base });
+  if (!res.ok) throw new ExternalSyncError(res.status);
+  return (await res.json())?.isUpdating === true;
 };
 
 export const updateCalendar = async (id: string, data: { title: string; color: string }): Promise<Calendar> =>
@@ -770,6 +798,8 @@ export const updateBookingRights = async (calendarId: string, userIds: string[])
 
 export const api = {
   addExternalCalendar,
+  syncExternalCalendar,
+  isExternalSyncing,
   getPreference,
   savePreference,
   getUiPreference,

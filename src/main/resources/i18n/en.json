@@ -396,5 +396,15 @@
   "calendar.switch.feedback.thanks": "Thank you, duly noted.",
   "calendar.switch.return.where": "You can change this at any time from your",
   "calendar.switch.return.settings": "account settings",
-  "calendar.notfound": "This calendar cannot be found or you no longer have access to it."
+  "calendar.notfound": "This calendar cannot be found or you no longer have access to it.",
+  "calendar.list.selectall": "Select all",
+  "calendar.delete.events.title": "Delete events",
+  "calendar.delete.events.confirm": "Delete the [[count]] selected events?",
+  "calendar.external.syncing": "Update in progress…",
+  "calendar.external.sync": "Update",
+  "calendar.external.updated": "Calendar [[title]] has been updated.",
+  "calendar.external.already": "Calendar [[title]] has already been updated.",
+  "calendar.external.already.retry": "Calendar [[title]] has already been updated. It can be updated every [[duration]].",
+  "calendar.external.sync.failed": "Error while updating the events of calendar [[title]].",
+  "calendar.event.also.in": "Also add to"
 }

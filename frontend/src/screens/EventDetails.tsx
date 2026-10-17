@@ -1,11 +1,13 @@
 import { Button, Modal } from '@open-ent/react';
+import { useQueries } from '@tanstack/react-query';
 import { CSSProperties, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Calendar, CalendarEvent } from '../api';
+import { api, Calendar, CalendarEvent } from '../api';
+import { isRbsEnabled, isReminderEnabled } from '../config';
 import { AttachmentFields } from '../features/AttachmentFields';
 import { DescriptionEditor } from '../features/DescriptionEditor';
-import { calendarColor, formatDateTime, isMultiDay, isoTime } from '../utils';
+import { calendarColor, formatBookingDate, formatDateTime, isMultiDay, isoTime } from '../utils';
 
 /**
  * Détail d'un événement en LECTURE SEULE — ce que voit un usager qui n'a pas le droit de
@@ -23,6 +25,40 @@ export function EventDetails({
   onClose: () => void;
 }) {
   const { t } = useTranslation(['calendar', 'common']);
+
+  // Réservations de ressources (module de réservation actif) : le serveur ne joint que l'identifiant
+  // de la ressource, on en récupère le nom — même rendu que dans le formulaire de modification.
+  const bookings = isRbsEnabled() ? (event.bookings ?? []) : [];
+  const resourceIds = [...new Set(bookings.map((b) => b.resource_id).filter((id): id is number => id != null))];
+  const resourceQueries = useQueries({
+    queries: resourceIds.map((id) => ({
+      queryKey: ['calendar', 'rbs', 'resource', id],
+      queryFn: () => api.fetchRbsResource(id),
+      staleTime: 5 * 60_000,
+    })),
+  });
+  const resourceNames = new Map<number, string>();
+  resourceIds.forEach((id, i) => {
+    const name = resourceQueries[i]?.data?.name;
+    if (name) resourceNames.set(id, name);
+  });
+
+  // Rappel de l'usager sur cet événement (fonction active seulement).
+  const reminder = isReminderEnabled() ? event.reminders : undefined;
+  const reminderTypes = reminder
+    ? [
+        reminder.reminderType.email && t('calendar.reminder.type.email', { defaultValue: 'E-mail' }),
+        reminder.reminderType.timeline && t('calendar.reminder.type.timeline', { defaultValue: 'Fil de nouveautés' }),
+      ].filter(Boolean)
+    : [];
+  const reminderWhen = reminder
+    ? [
+        reminder.reminderFrequency.hour && t('calendar.reminder.hour', { defaultValue: '1 heure avant' }),
+        reminder.reminderFrequency.day && t('calendar.reminder.day', { defaultValue: '1 jour avant' }),
+        reminder.reminderFrequency.week && t('calendar.reminder.week', { defaultValue: '1 semaine avant' }),
+        reminder.reminderFrequency.month && t('calendar.reminder.month', { defaultValue: '1 mois avant' }),
+      ].filter(Boolean)
+    : [];
 
   const hosts = calendars.filter((c) => event.calendar?.includes(c._id));
   const multiDay = isMultiDay(event.startMoment, event.endMoment);
@@ -95,6 +131,28 @@ export function EventDetails({
               readOnly
             />
           </div>
+        )}
+
+        {bookings.length > 0 && (
+          <Line label={t('calendar.booking.title', { defaultValue: 'Réservation de ressources' })}>
+            <ul className="list-unstyled m-0" data-event-bookings>
+              {bookings.map((b) => (
+                <li key={b.id}>
+                  {(b.resource_id != null && resourceNames.get(b.resource_id)) || '—'}
+                  {b.start_date && ` — ${formatBookingDate(b.start_date)}`}
+                  {b.end_date && ` → ${formatBookingDate(b.end_date)}`}
+                </li>
+              ))}
+            </ul>
+          </Line>
+        )}
+
+        {reminder && reminderTypes.length > 0 && reminderWhen.length > 0 && (
+          <Line label={t('calendar.reminder', { defaultValue: 'Rappel' })}>
+            <span data-event-reminder>
+              {reminderTypes.join(', ')} — {reminderWhen.join(', ')}
+            </span>
+          </Line>
         )}
 
         {event.isRecurrent && (

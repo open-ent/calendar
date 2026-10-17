@@ -56,6 +56,8 @@ export interface EventDialogProps {
   calendars: Calendar[];
   event?: CalendarEvent;
   defaultCalendarId?: string;
+  /** Début proposé à la création (clic sur un créneau de la grille) ; fin = +1 h. */
+  defaultStart?: Date;
   /**
    * Pour un événement récurrent : portée choisie en amont — cette occurrence seule, ou toute
    * la série (`POST …/updateAll`).
@@ -71,6 +73,7 @@ export function EventDialog({
   calendars,
   event,
   defaultCalendarId,
+  defaultStart,
   scope = 'one',
   structureId,
   onClose,
@@ -85,8 +88,13 @@ export function EventDialog({
   const [calendarId, setCalendarId] = useState(
     event?.calendar?.[0] ?? defaultCalendarId ?? calendars[0]?._id ?? '',
   );
-  const [start, setStart] = useState(isoUtcToLocalInput(event?.startMoment));
-  const [end, setEnd] = useState(isoUtcToLocalInput(event?.endMoment));
+  // Création seulement : copies de l'événement dans d'autres agendas (parité AngularJS, une copie par
+  // agenda coché — le serveur ne crée que dans l'agenda de l'URL).
+  const [extraCalendarIds, setExtraCalendarIds] = useState<string[]>([]);
+  const [start, setStart] = useState(isoUtcToLocalInput(event?.startMoment ?? defaultStart?.toISOString()));
+  const [end, setEnd] = useState(
+    isoUtcToLocalInput(event?.endMoment ?? (defaultStart ? new Date(defaultStart.getTime() + 3_600_000).toISOString() : undefined)),
+  );
   const [allday, setAllday] = useState(event?.allday ?? false);
   const [location, setLocation] = useState(event?.location ?? '');
   // La description est du HTML : l'ancienne interface l'écrit avec un éditeur riche, et le
@@ -411,11 +419,16 @@ export function EventDialog({
         }
         return api.updateEvent(calendarId, event!._id, body);
       }
-      if (isRecurrent && recurrence) {
-        const series = occurrences(body.startMoment, body.endMoment, recurrence);
-        return api.createRecurrentEvents(calendarId, body, series);
+      const series = isRecurrent && recurrence ? occurrences(body.startMoment, body.endMoment, recurrence) : null;
+      const create = (id: string, b: EventInput) =>
+        series ? api.createRecurrentEvents(id, b, series) : api.createEvent(id, b);
+      const result = await create(calendarId, body);
+      // Copies : sans la réservation de ressource, qui ne se fait qu'une fois (agenda principal).
+      const { bookings: _bookings, ...copyBody } = body;
+      for (const id of extraCalendarIds.filter((x) => x !== calendarId)) {
+        await create(id, { ...copyBody, calendar: [id] });
       }
-      return api.createEvent(calendarId, body);
+      return result;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['calendar', 'events'] });
@@ -527,6 +540,27 @@ export function EventDialog({
               </option>
             ))}
           </select>
+          {!editing && calendars.length > 1 && (
+            <fieldset className="border-0 p-0 m-0 mt-8" data-event-extra-calendars>
+              <legend className="small text-gray-700 mb-4">
+                {t('calendar.event.also.in', { defaultValue: 'Ajouter aussi à' })}
+              </legend>
+              {calendars
+                .filter((c) => c._id !== calendarId)
+                .map((c) => (
+                  <Checkbox
+                    key={c._id}
+                    label={c.title}
+                    checked={extraCalendarIds.includes(c._id)}
+                    onChange={(e) =>
+                      setExtraCalendarIds((prev) =>
+                        e.target.checked ? [...prev, c._id] : prev.filter((x) => x !== c._id),
+                      )
+                    }
+                  />
+                ))}
+            </fieldset>
+          )}
         </div>
 
         <div className="d-flex gap-16 flex-wrap mb-16">

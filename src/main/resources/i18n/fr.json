@@ -395,5 +395,15 @@
   "calendar.switch.feedback.thanks": "Merci, c'est noté.",
   "calendar.switch.return.where": "Ce choix reste modifiable à tout moment depuis les",
   "calendar.switch.return.settings": "paramètres de votre compte",
-  "calendar.notfound": "Cet agenda est introuvable ou vous n'y avez plus accès."
+  "calendar.notfound": "Cet agenda est introuvable ou vous n'y avez plus accès.",
+  "calendar.list.selectall": "Tout sélectionner",
+  "calendar.delete.events.title": "Supprimer les événements",
+  "calendar.delete.events.confirm": "Supprimer les [[count]] événements sélectionnés ?",
+  "calendar.external.syncing": "Mise à jour en cours…",
+  "calendar.external.sync": "Mettre à jour",
+  "calendar.external.updated": "L'agenda [[title]] a été mis à jour.",
+  "calendar.external.already": "L'agenda [[title]] a déjà été mis à jour.",
+  "calendar.external.already.retry": "L'agenda [[title]] a déjà été mis à jour. Il est possible de le mettre à jour toutes les [[duration]].",
+  "calendar.external.sync.failed": "Erreur lors de la mise à jour des événements de l'agenda [[title]].",
+  "calendar.event.also.in": "Ajouter aussi à"
 }
