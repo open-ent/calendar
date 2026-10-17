@@ -6,20 +6,23 @@ settings:
 
 overrides:
   i18next: 23.8.1
+  '@open-ent/react': file:/tmp/pkg-override/react.tgz
+  '@open-ent/bootstrap': file:/tmp/pkg-override/bootstrap.tgz
+  '@open-ent/client': file:/tmp/pkg-override/client.tgz
 
 importers:
 
   .:
     dependencies:
       '@open-ent/bootstrap':
-        specifier: 2.5.30-patched
-        version: 2.5.30-patched
+        specifier: file:/tmp/pkg-override/bootstrap.tgz
+        version: file:../../../../../../../../tmp/pkg-override/bootstrap.tgz
       '@open-ent/client':
-        specifier: 2.5.30-patched
-        version: 2.5.30-patched
+        specifier: file:/tmp/pkg-override/client.tgz
+        version: file:../../../../../../../../tmp/pkg-override/client.tgz
       '@open-ent/react':
-        specifier: 2.5.30-patched
-        version: 2.5.30-patched(@react-spring/web@9.7.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tanstack/react-query@5.62.7(react@18.3.1))(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(@tiptap/react@2.11.0(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react-hook-form@7.71.1(react@18.3.1))(react-i18next@14.1.3(i18next@23.8.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(rollup@4.62.2)(typescript@5.5.4)
+        specifier: file:/tmp/pkg-override/react.tgz
+        version: file:../../../../../../../../tmp/pkg-override/react.tgz(@react-spring/web@9.7.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tanstack/react-query@5.62.7(react@18.3.1))(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(@tiptap/react@2.11.0(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react-hook-form@7.71.1(react@18.3.1))(react-i18next@14.1.3(i18next@23.8.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(rollup@4.62.2)(typescript@5.5.4)
       '@tanstack/react-query':
         specifier: 5.62.7
         version: 5.62.7(react@18.3.1)
@@ -514,14 +517,17 @@ packages:
     resolution: {integrity: sha512-xglYA6q3XO5P3BNJYxVZ1IV7DLVjp1Py6nwag88YntrS+3vKHyYcMqXVS4ZztJmwz2uGvz1FWhI/4LgbR5uQDA==}
     engines: {node: '>= 10'}
 
-  '@open-ent/bootstrap@2.5.30-patched':
-    resolution: {integrity: sha512-bRauL1bj9lFzF6lCk9mu1zoeg9JzvrOZqxmqOTOXhoQZ057gpKhn9vX+l2ldQz+BlZgmOHsWGl2wjiIoHYXJ4A==, tarball: https://npm.pkg.github.com/download/@open-ent/bootstrap/2.5.30-patched/a65d2329307f075d367920dac2aa1f93eb30f9db}
+  '@open-ent/bootstrap@file:../../../../../../../../tmp/pkg-override/bootstrap.tgz':
+    resolution: {integrity: sha512-bRauL1bj9lFzF6lCk9mu1zoeg9JzvrOZqxmqOTOXhoQZ057gpKhn9vX+l2ldQz+BlZgmOHsWGl2wjiIoHYXJ4A==, tarball: file:../../../../../../../../tmp/pkg-override/bootstrap.tgz}
+    version: 2.5.30-patched
 
-  '@open-ent/client@2.5.30-patched':
-    resolution: {integrity: sha512-M+63EBTWykwdhL1iPPKD57+Xd1imgz9GTsTb41nv0n6AmbuItggbGUXSj5+uzhf6XpDg+bJ7jnGM9mJrDOCilQ==, tarball: https://npm.pkg.github.com/download/@open-ent/client/2.5.30-patched/4c20377db1b6028283976fa315da3dfc9c0bd763}
+  '@open-ent/client@file:../../../../../../../../tmp/pkg-override/client.tgz':
+    resolution: {integrity: sha512-M+63EBTWykwdhL1iPPKD57+Xd1imgz9GTsTb41nv0n6AmbuItggbGUXSj5+uzhf6XpDg+bJ7jnGM9mJrDOCilQ==, tarball: file:../../../../../../../../tmp/pkg-override/client.tgz}
+    version: 2.5.30-patched
 
-  '@open-ent/react@2.5.30-patched':
-    resolution: {integrity: sha512-Zi5cZaA1tHgwmnPx8eLS8HA/rxqQl6MTJ+gpKg+l/X9Pfphk67rM/ofipRr1mCaAnMVAQdeT4UIMW1yL0iIzVA==, tarball: https://npm.pkg.github.com/download/@open-ent/react/2.5.30-patched/6a919ba5eb5e54cc5d4ca5ac0eb96f8dfb7ef4a2}
+  '@open-ent/react@file:../../../../../../../../tmp/pkg-override/react.tgz':
+    resolution: {integrity: sha512-qdMdwa79nqBm6+kHEX352C/QqSjErbNE5H5PY/tG11wwEdv5MwdF21AG4cPJi8YaJjIUHMGMDi8Y2l9fA1Fgvw==, tarball: file:../../../../../../../../tmp/pkg-override/react.tgz}
+    version: 2.5.30-patched
     peerDependencies:
       '@react-spring/web': 9.7.5
       '@tanstack/react-query': 5.62.7
@@ -3069,12 +3075,12 @@ snapshots:
       '@napi-rs/canvas-win32-x64-msvc': 0.1.100
     optional: true
 
-  '@open-ent/bootstrap@2.5.30-patched':
+  '@open-ent/bootstrap@file:../../../../../../../../tmp/pkg-override/bootstrap.tgz':
     dependencies:
       '@popperjs/core': 2.11.8
       bootstrap: 5.3.8(@popperjs/core@2.11.8)
 
-  '@open-ent/client@2.5.30-patched':
+  '@open-ent/client@file:../../../../../../../../tmp/pkg-override/client.tgz':
     dependencies:
       '@open-ent/utilities': 2.5.30-patched
       axios: 1.13.4
@@ -3083,14 +3089,14 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  '@open-ent/react@2.5.30-patched(@react-spring/web@9.7.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tanstack/react-query@5.62.7(react@18.3.1))(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(@tiptap/react@2.11.0(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react-hook-form@7.71.1(react@18.3.1))(react-i18next@14.1.3(i18next@23.8.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(rollup@4.62.2)(typescript@5.5.4)':
+  '@open-ent/react@file:../../../../../../../../tmp/pkg-override/react.tgz(@react-spring/web@9.7.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tanstack/react-query@5.62.7(react@18.3.1))(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(@tiptap/react@2.11.0(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react-hook-form@7.71.1(react@18.3.1))(react-i18next@14.1.3(i18next@23.8.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(rollup@4.62.2)(typescript@5.5.4)':
     dependencies:
       '@ant-design/icons': 5.4.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@dnd-kit/core': 6.3.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@dnd-kit/sortable': 8.0.0(@dnd-kit/core@6.3.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
       '@dnd-kit/utilities': 3.2.2(react@18.3.1)
       '@floating-ui/react': 0.26.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@open-ent/bootstrap': 2.5.30-patched
+      '@open-ent/bootstrap': file:../../../../../../../../tmp/pkg-override/bootstrap.tgz
       '@open-ent/tiptap-extensions': 2.5.30-patched(@tiptap/core@2.11.0(@tiptap/pm@2.11.0))(@tiptap/pm@2.11.0)(rollup@4.62.2)(typescript@5.5.4)
       '@open-ent/utilities': 2.5.30-patched
       '@popperjs/core': 2.11.8
