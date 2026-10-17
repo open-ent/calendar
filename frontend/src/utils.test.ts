@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  dateRangeError,
   daySpan,
   fortnightDays,
   isMultiDay,
@@ -361,5 +362,18 @@ describe('réservation RBS depuis le formulaire d’événement (I5 : profils de
     const result = snapToSlotProfile(start, end, slots);
     expect(result.start.getTime()).toBe(start.getTime());
     expect(result.end.getTime()).toBe(end.getTime());
+  });
+});
+
+describe('dateRangeError', () => {
+  it('début avant le 01/01/2000 → old', () => {
+    expect(dateRangeError(new Date(1999, 11, 31), new Date(2000, 0, 2))).toBe('old');
+  });
+  it('fin au-delà de 80 ans → far, pile 80 ans accepté', () => {
+    expect(dateRangeError(new Date(2026, 0, 1), new Date(2110, 0, 1))).toBe('far');
+    expect(dateRangeError(new Date(2026, 0, 1), new Date(2106, 0, 1))).toBeNull();
+  });
+  it('dates courantes → null', () => {
+    expect(dateRangeError(new Date(2026, 9, 17, 9), new Date(2026, 9, 17, 10))).toBeNull();
   });
 });

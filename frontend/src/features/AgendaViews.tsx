@@ -30,6 +30,8 @@ export interface ViewHandlers {
 
 interface ViewProps extends ViewHandlers {
   cursor: Date;
+  /** Bascule en vue Jour sur ce jour : cible du lien « +N autre(s) » des vues Mois et Quinzaine. */
+  onShowDay: (day: Date) => void;
   events: CalendarEvent[];
 }
 
@@ -119,7 +121,7 @@ export function WeekView({ cursor, events, colorOf, rightsOf, onOpen, onShare, o
  * cadrés sur un lundi au lieu du mois calendaire). La date de chaque cellule est au format
  * jour/mois (et non juste le quantième) car une quinzaine peut chevaucher deux mois.
  */
-export function FortnightView({ cursor, events, colorOf, onOpen }: ViewProps) {
+export function FortnightView({ cursor, events, colorOf, onOpen, onShowDay }: ViewProps) {
   const { t } = useTranslation(['calendar', 'common']);
   const today = new Date().toISOString();
   const maxChips = 3;
@@ -158,12 +160,16 @@ export function FortnightView({ cursor, events, colorOf, onOpen }: ViewProps) {
               );
             })}
             {dayEvents.length > maxChips && (
-              <div className="small text-gray-700">
+              <button
+                type="button"
+                className="btn btn-link small p-0 text-gray-700"
+                onClick={() => onShowDay(day)}
+              >
                 {t('calendar.month.more', {
                   defaultValue: '+[[count]] autre(s)',
                   count: dayEvents.length - maxChips,
                 })}
-              </div>
+              </button>
             )}
           </div>
         );
@@ -173,7 +179,7 @@ export function FortnightView({ cursor, events, colorOf, onOpen }: ViewProps) {
 }
 
 /** Vue Mois : grille 6 × 7, les événements en pastilles cliquables. */
-export function MonthView({ cursor, events, colorOf, onOpen }: ViewProps) {
+export function MonthView({ cursor, events, colorOf, onOpen, onShowDay }: ViewProps) {
   const { t } = useTranslation(['calendar', 'common']);
   const today = new Date().toISOString();
   const maxChips = 3;
@@ -217,12 +223,16 @@ export function MonthView({ cursor, events, colorOf, onOpen }: ViewProps) {
               );
             })}
             {dayEvents.length > maxChips && (
-              <div className="small text-gray-700">
+              <button
+                type="button"
+                className="btn btn-link small p-0 text-gray-700"
+                onClick={() => onShowDay(day)}
+              >
                 {t('calendar.month.more', {
                   defaultValue: '+[[count]] autre(s)',
                   count: dayEvents.length - maxChips,
                 })}
-              </div>
+              </button>
             )}
           </div>
         );

@@ -395,5 +395,6 @@
   "calendar.switch.feedback.skip": "Go back without answering",
   "calendar.switch.feedback.thanks": "Thank you, duly noted.",
   "calendar.switch.return.where": "You can change this at any time from your",
-  "calendar.switch.return.settings": "account settings"
+  "calendar.switch.return.settings": "account settings",
+  "calendar.notfound": "This calendar cannot be found or you no longer have access to it."
 }

@@ -21,7 +21,8 @@ export interface Calendar {
   title: string;
   color?: string;
   owner?: { userId: string; displayName: string };
-  isDefault?: boolean;
+  /** Agenda par défaut de l'utilisateur (champ serveur) : ni supprimable ni partageable. */
+  is_default?: boolean;
   shared?: SharedEntry[];
   /** Agenda externe : alimenté par un flux ICS (icsLink), synchronisé côté serveur. */
   isExternal?: boolean;

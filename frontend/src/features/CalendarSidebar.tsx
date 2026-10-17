@@ -187,7 +187,8 @@ export function CalendarSidebar({
   const actionsFor = (c: Calendar): RowAction[] => {
     const rights = rightsOf(c);
     const actions: RowAction[] = [...publishAction(c, rights)];
-    if (rights.share) {
+    // L'agenda par défaut n'est ni partageable ni supprimable (parité AngularJS `!is_default`).
+    if (rights.share && !c.is_default) {
       actions.push({
         key: 'share',
         label: t('calendar.share', { defaultValue: 'Partager' }),
@@ -221,7 +222,7 @@ export function CalendarSidebar({
         onClick: () => onEdit(c),
       });
     }
-    if (rights.remove) {
+    if (rights.remove && !c.is_default) {
       actions.push({
         key: 'delete',
         label: t('calendar.delete', { defaultValue: 'Supprimer' }),

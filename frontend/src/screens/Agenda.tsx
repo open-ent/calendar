@@ -1,8 +1,9 @@
 import { AppHeader, Breadcrumb, Button, useEdificeClient, useHasWorkflow } from '@open-ent/react';
 import { IconPlus } from '@open-ent/react/icons';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
 
 import { api, Calendar, CalendarEvent } from '../api';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -92,6 +93,15 @@ export function Agenda() {
   const calendars = useMemo(() => calendarsQuery.data ?? [], [calendarsQuery.data]);
 
   const { isVisible, toggle, reveal } = useCalendarVisibility(calendars);
+
+  // Lien profond `#/view/:calendarId` : l'agenda demandé est rendu visible ; inconnu → message « introuvable ».
+  const { calendarId: deepLinkId } = useParams();
+  const deepLinkMissing = !!deepLinkId && calendarsQuery.isSuccess && !calendars.some((c) => c._id === deepLinkId);
+  useEffect(() => {
+    if (deepLinkId && calendars.some((c) => c._id === deepLinkId)) reveal(deepLinkId);
+    // `reveal` change à chaque rendu : seul le chargement des agendas ou l'identifiant déclenche.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkId, calendars]);
   const visibleCalendars = useMemo(
     () => calendars.filter((c) => isVisible(c._id)),
     [calendars, isVisible],
@@ -266,6 +276,11 @@ export function Agenda() {
     colorOf,
     rightsOf: rightsOfEvent,
     onOpen: openEvent,
+    // « +N autre(s) » d'une cellule : on ouvre ce jour-là en vue Jour (ex. 12 oct. surchargé).
+    onShowDay: (day: Date) => {
+      setCursor(day);
+      setView('day');
+    },
     onShare: (event: CalendarEvent) => openShare('event', event._id, event.title),
     onDelete: (event: CalendarEvent) => {
       // Repart d'un état propre : sans cela, l'échec d'une suppression précédente afficherait
@@ -374,6 +389,12 @@ export function Agenda() {
             onShift={(direction) => setCursor(shiftCursor(cursor, view, direction))}
             onToday={() => setCursor(new Date())}
           />
+
+          {deepLinkMissing && (
+            <p className="alert alert-warning" role="alert" data-calendar-notfound>
+              {t('calendar.notfound', { defaultValue: "Cet agenda est introuvable ou vous n'y avez plus accès." })}
+            </p>
+          )}
 
           {view === 'day' && <DayView {...viewProps} />}
           {view === 'week' && <WeekView {...viewProps} />}

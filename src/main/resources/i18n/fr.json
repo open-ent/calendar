@@ -394,5 +394,6 @@
   "calendar.switch.feedback.skip": "Revenir sans répondre",
   "calendar.switch.feedback.thanks": "Merci, c'est noté.",
   "calendar.switch.return.where": "Ce choix reste modifiable à tout moment depuis les",
-  "calendar.switch.return.settings": "paramètres de votre compte"
+  "calendar.switch.return.settings": "paramètres de votre compte",
+  "calendar.notfound": "Cet agenda est introuvable ou vous n'y avez plus accès."
 }

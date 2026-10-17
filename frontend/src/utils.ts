@@ -412,3 +412,18 @@ export function recurrenceSummary(
   }
   return parts.join(' · ');
 }
+
+/** Bornes de saisie des dates d'un événement (parité AngularJS : `minStartMomentDate` / `maxEndMomentDate`). */
+export const MIN_START_DATE = new Date(2000, 0, 1);
+export const MAX_EVENT_YEARS = 80;
+
+/**
+ * Date de début trop ancienne (avant le 01/01/2000) ou fin trop lointaine (plus de 80 ans après le début).
+ * Ex. début 1999-12-31 → 'old' ; début 2026-01-01 / fin 2110-01-01 → 'far'. `null` si tout va bien.
+ */
+export function dateRangeError(start: Date, end: Date): 'old' | 'far' | null {
+  if (start.getTime() < MIN_START_DATE.getTime()) return 'old';
+  const limit = new Date(start);
+  limit.setFullYear(limit.getFullYear() + MAX_EVENT_YEARS);
+  return end.getTime() > limit.getTime() ? 'far' : null;
+}

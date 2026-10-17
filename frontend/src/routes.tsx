@@ -7,7 +7,11 @@ export const routes: RouteObject[] = [
   {
     path: '/',
     element: <Root />,
-    children: [{ index: true, element: <Agenda /> }],
+    // `/view/:calendarId` : lien profond (notifications) qui ouvre l'agenda demandé, comme côté AngularJS.
+    children: [
+      { index: true, element: <Agenda /> },
+      { path: 'view/:calendarId', element: <Agenda /> },
+    ],
   },
 ];
 

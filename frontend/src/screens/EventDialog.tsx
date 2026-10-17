@@ -42,6 +42,7 @@ import {
   Recurrence,
 } from '../recurrence';
 import {
+  dateRangeError,
   formatBookingDate,
   isoUtcToLocalInput,
   localInputToIsoUtc,
@@ -218,6 +219,15 @@ export function EventDialog({
     !Number.isNaN(startDate.getTime()) &&
     !Number.isNaN(endDate.getTime()) &&
     endDate.getTime() > startDate.getTime();
+
+  // Bornes de saisie (parité AngularJS) : début avant 2000 ou fin à plus de 80 ans.
+  const rangeProblem = datesValid ? dateRangeError(startDate, endDate) : null;
+  const rangeError =
+    rangeProblem === 'old'
+      ? t('calendar.error.date.old', { defaultValue: 'La date de début doit être supérieure au 01/01/2000.' })
+      : rangeProblem === 'far'
+        ? t('calendar.error.date.far', { defaultValue: "La durée de l'événement ne doit pas excéder 80 ans." })
+        : '';
 
   // I2 : disponibilité (quantité) et délais min/max de la ressource choisie, sur le créneau de
   // l'événement — même logique que `isResourceQuantityValid`/`bookingDelaysValid` côté AngularJS,
@@ -437,6 +447,10 @@ export function EventDialog({
       setFormError(
         t('calendar.event.badrange', { defaultValue: 'La fin doit être postérieure au début.' }),
       );
+      return;
+    }
+    if (rangeError) {
+      setFormError(rangeError);
       return;
     }
     if (recurrenceError) {
