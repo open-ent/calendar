@@ -147,3 +147,47 @@
   width: min(640px, calc(100vw - 32px));
   background: var(--openent-white, #fff);
 }
+
+/* « Ajouter à mon agenda » : trois tuiles (Google, Apple, Outlook) dépliées dans la fiche. */
+.add-to-calendar-panel {
+  margin-top: 0.8rem;
+  padding: 1.6rem;
+  border: 1px solid var(--openent-gray-300, #dee2e6);
+  border-radius: var(--openent-border-radius, 0.8rem);
+}
+.add-to-calendar-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.add-to-calendar-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.2rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--openent-border-radius, 0.8rem);
+  background: none;
+  color: var(--openent-gray-800, #333);
+  text-decoration: none;
+  cursor: pointer;
+}
+.add-to-calendar-tile:hover,
+.add-to-calendar-tile:focus-visible {
+  background: var(--openent-gray-100, #f8f9fa);
+  border-color: var(--openent-gray-300, #dee2e6);
+  color: var(--openent-gray-800, #333);
+}
+/* Lien vers le fichier .ics : style propre, les classes `btn-link` variant d'un thème à l'autre. */
+.add-to-calendar-ics {
+  display: inline-block;
+  margin-top: 0.8rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 1.4rem;
+  color: var(--openent-primary, #2a9cc8);
+  text-decoration: underline;
+  cursor: pointer;
+}

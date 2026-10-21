@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { api, Calendar, CalendarEvent } from '../api';
 import { isRbsEnabled, isReminderEnabled } from '../config';
+import { AddToCalendar } from '../features/AddToCalendar';
 import { AttachmentFields } from '../features/AttachmentFields';
 import { DescriptionEditor } from '../features/DescriptionEditor';
 import { calendarColor, formatBookingDate, formatDateTime, isMultiDay, isoTime } from '../utils';
@@ -156,10 +157,11 @@ export function EventDetails({
         )}
 
         {event.isRecurrent && (
-          <p className="small text-gray-700 m-0">
+          <p className="small text-gray-700 mb-12">
             {t('calendar.event.recurrent', { defaultValue: 'Événement récurrent.' })}
           </p>
         )}
+        <AddToCalendar event={event} />
       </Modal.Body>
       <Modal.Footer>
         <Button type="button" color="tertiary" variant="ghost" onClick={onClose}>

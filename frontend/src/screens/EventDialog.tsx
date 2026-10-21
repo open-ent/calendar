@@ -28,6 +28,7 @@ import { RecurrenceScope } from '../components/RecurrenceScopeModal';
 import { isRbsEnabled, isReminderEnabled } from '../config';
 import { dateLocale } from '../locale';
 import { RecurrenceFields } from '../features/RecurrenceFields';
+import { AddToCalendar } from '../features/AddToCalendar';
 import { AttachmentFields } from '../features/AttachmentFields';
 import { DescriptionEditor } from '../features/DescriptionEditor';
 import { ReminderFields } from '../features/ReminderFields';
@@ -508,6 +509,8 @@ export function EventDialog({
           : t('calendar.event.new', { defaultValue: 'Nouvel événement' })}
       </Modal.Header>
       <Modal.Body>
+        {/* Événement déjà enregistré : l'ajouter à son agenda personnel (valeurs enregistrées). */}
+        {editing && event && <AddToCalendar event={event} />}
         {editing && event?.isRecurrent && (
           <Alert type="info" className="mb-16">
             {scope === 'all'

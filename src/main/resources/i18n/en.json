@@ -406,5 +406,9 @@
   "calendar.external.already": "Calendar [[title]] has already been updated.",
   "calendar.external.already.retry": "Calendar [[title]] has already been updated. It can be updated every [[duration]].",
   "calendar.external.sync.failed": "Error while updating the events of calendar [[title]].",
-  "calendar.event.also.in": "Also add to"
+  "calendar.event.also.in": "Also add to",
+  "calendar.addto.button": "Add to my calendar",
+  "calendar.addto.help": "Add this event to your personal calendar so you don't forget it.",
+  "calendar.addto.ics": "Other calendar: download the .ics file",
+  "calendar.addto.recurrent": "Only this occurrence is added, not the whole series."
 }
