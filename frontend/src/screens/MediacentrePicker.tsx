@@ -174,7 +174,7 @@ export function MediacentrePicker({ attached, onAdd, onClose }: MediacentrePicke
                   >
                     {isAttached(r)
                       ? t('calendar.event.resources.attached', { defaultValue: 'Déjà ajoutée' })
-                      : t('calendar.add', { defaultValue: 'Ajouter' })}
+                      : t('calendar.event.add', { defaultValue: 'Ajouter' })}
                   </Button>
                 </li>
               ))}
