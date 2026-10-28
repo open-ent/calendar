@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { Calendar } from '../api';
 import { dateLocale } from '../locale';
 import { CalendarRights } from '../rights';
+import { calendarLabel } from '../calendarLabel';
 import { calendarColor } from '../utils';
 
 /** Une action du menu d'un agenda. */
@@ -53,14 +54,15 @@ function CalendarRow({
   return (
     <li className="d-flex align-items-center justify-content-between gap-4 py-4">
       <label className="agenda-calendar-label d-flex align-items-center gap-8 overflow-hidden m-0">
-        <Checkbox checked={checked} onChange={onToggle} aria-label={calendar.title} />
+        <Checkbox checked={checked} onChange={onToggle} aria-label={calendarLabel(calendar, t)} />
         <span
           aria-hidden="true"
           className="agenda-swatch"
           style={{ '--agenda-color': calendarColor(calendar.color) } as CSSProperties}
         />
-        <span className="text-truncate">
-          {calendar.title}
+        {/* Passage à la ligne plutôt que troncature : le nom de l'établissement doit rester lisible. */}
+        <span className="text-break" title={calendarLabel(calendar, t)}>
+          {calendarLabel(calendar, t)}
           {subtitle && <span className="small text-gray-700"> ({subtitle})</span>}
         </span>
       </label>
@@ -72,7 +74,7 @@ function CalendarRow({
               size="sm"
               hideCarret
               icon={<IconOptions />}
-              aria-label={`${t('calendar.actions', { defaultValue: 'Actions' })} : ${calendar.title}`}
+              aria-label={`${t('calendar.actions', { defaultValue: 'Actions' })} : ${calendarLabel(calendar, t)}`}
             />
             <Dropdown.Menu>
               {actions.map((a) => (

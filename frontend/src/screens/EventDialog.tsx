@@ -23,6 +23,7 @@ import {
   EventReminder,
   EventResource,
 } from '../api';
+import { calendarLabel } from '../calendarLabel';
 import { addAttachments, addResource, repairAttachment, toAttachment } from '../attachments';
 import { RecurrenceScope } from '../components/RecurrenceScopeModal';
 import { isRbsEnabled, isReminderEnabled } from '../config';
@@ -539,7 +540,7 @@ export function EventDialog({
           >
             {calendars.map((c) => (
               <option key={c._id} value={c._id}>
-                {c.title}
+                {calendarLabel(c, t)}
               </option>
             ))}
           </select>
@@ -553,7 +554,7 @@ export function EventDialog({
                 .map((c) => (
                   <Checkbox
                     key={c._id}
-                    label={c.title}
+                    label={calendarLabel(c, t)}
                     checked={extraCalendarIds.includes(c._id)}
                     onChange={(e) =>
                       setExtraCalendarIds((prev) =>
