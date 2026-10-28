@@ -45,13 +45,13 @@ public class DefaultUserServiceImplTest {
         //Expected data
         JsonObject expectedUser = new JsonObject().put(Field.USERID, USER_ID).put(Field.IDS, groupIds);
         String expectedQuery = "MATCH (u:User) " +
-                "WHERE u.id IN {ids} AND u.id <> {userId} " +
+                "WHERE u.id IN $ids AND u.id <> $userId " +
                 "RETURN distinct u.id as id, u.displayName as displayName"
 
                 + " UNION " +
 
                 "MATCH (n:Group )<-[:IN]-(u:User) " +
-                "WHERE n.id IN {ids} AND u.id <> {userId} " +
+                "WHERE n.id IN $ids AND u.id <> $userId " +
                 "RETURN distinct u.id as id, u.displayName as displayName";
 
         Mockito.doAnswer(invocation -> {
@@ -76,13 +76,13 @@ public class DefaultUserServiceImplTest {
         //Expected data
         JsonObject expectedUser = new JsonObject().put(Field.USERID, USER_ID).put(Field.IDS, groupIds);
         String expectedQuery = "MATCH (u:User) " +
-                "WHERE u.id IN {ids} " +
+                "WHERE u.id IN $ids " +
                 "RETURN distinct u.id as id, u.displayName as displayName"
 
                 + " UNION " +
 
                 "MATCH (n:Group )<-[:IN]-(u:User) " +
-                "WHERE n.id IN {ids} " +
+                "WHERE n.id IN $ids " +
                 "RETURN distinct u.id as id, u.displayName as displayName";
 
         Mockito.doAnswer(invocation -> {
