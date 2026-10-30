@@ -33,7 +33,7 @@ public class DefaultUserServiceImpl implements UserService {
 
         JsonObject params = new JsonObject().put(BOOKMARK_IDS, bookmarksIds);
 
-        String query = "WITH {bookmarksIds} AS shareBookmarkIds " +
+        String query = "WITH $bookmarksIds AS shareBookmarkIds " +
                 "UNWIND shareBookmarkIds AS shareBookmarkId " +
                 "MATCH (u:User)-[:HAS_SB]->(sb:ShareBookmark) " +
                 "UNWIND TAIL(sb[shareBookmarkId]) as vid MATCH (v:Visible {id : vid}) " +
@@ -90,13 +90,13 @@ public class DefaultUserServiceImpl implements UserService {
      */
     private String getShareIdUserGroupInfoQuery(boolean keepUserFromSession) {
         return "MATCH (u:User) " +
-                "WHERE u.id IN {ids} " + (keepUserFromSession ? "" : "AND u.id <> {userId} ") +
+                "WHERE u.id IN $ids " + (keepUserFromSession ? "" : "AND u.id <> $userId ") +
                 "RETURN distinct u.id as id, u.displayName as displayName"
 
                 + " UNION " +
 
                 "MATCH (n:Group )<-[:IN]-(u:User) " +
-                "WHERE n.id IN {ids} " + (keepUserFromSession ? "" : "AND u.id <> {userId} ") +
+                "WHERE n.id IN $ids " + (keepUserFromSession ? "" : "AND u.id <> $userId ") +
                 "RETURN distinct u.id as id, u.displayName as displayName";
     }
 
@@ -113,7 +113,7 @@ public class DefaultUserServiceImpl implements UserService {
         Promise<User> promise = Promise.promise();
         JsonObject params = new JsonObject().put(Field.USERID, userId);
 
-        String query = "MATCH (U: User) WHERE U.id = {userId} RETURN U";
+        String query = "MATCH (U: User) WHERE U.id = $userId RETURN U";
         neo4j.execute(query, params, Neo4jResult.validUniqueResultHandler(res -> {
             if (res.isLeft()) {
                 String message = String.format("[Calendar@%s::fetchUserById] An error has occurred" +

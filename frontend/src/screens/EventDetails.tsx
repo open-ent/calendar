@@ -8,6 +8,7 @@ import { isRbsEnabled, isReminderEnabled } from '../config';
 import { AddToCalendar } from '../features/AddToCalendar';
 import { AttachmentFields } from '../features/AttachmentFields';
 import { DescriptionEditor } from '../features/DescriptionEditor';
+import { calendarLabel } from '../calendarLabel';
 import { calendarColor, formatBookingDate, formatDateTime, isMultiDay, isoTime } from '../utils';
 
 /**
@@ -96,7 +97,7 @@ export function EventDetails({
                     className="agenda-swatch"
                     style={{ '--agenda-color': calendarColor(c.color) } as CSSProperties}
                   />
-                  {c.title}
+                  {calendarLabel(c, t)}
                 </span>
               ))}
             </span>

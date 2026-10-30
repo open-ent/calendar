@@ -194,7 +194,7 @@ public class CalendarController extends MongoDbControllerHelper {
         if (forcedUi != null) return Future.succeededFuture(forcedUi);
 
         final Promise<String> promise = Promise.promise();
-        final String query = "MATCH (:User {id:{userId}})-[:PREFERS]->(uac:UserAppConf) " +
+        final String query = "MATCH (:User {id:$userId})-[:PREFERS]->(uac:UserAppConf) " +
                 "RETURN uac." + UI_PREFERENCE + " AS preference";
         neo4j.execute(query, new JsonObject().put("userId", userId), message -> {
             promise.complete(readUi(message.body()));
@@ -281,7 +281,7 @@ public class CalendarController extends MongoDbControllerHelper {
         if (structureIds.isEmpty()) {
             return Future.succeededFuture();
         }
-        String query = "MATCH (s:Structure {id:{id}}) RETURN s.name as name";
+        String query = "MATCH (s:Structure {id:$id}) RETURN s.name as name";
         List<Future<Void>> lookups = new ArrayList<>();
         for (String structureId : structureIds) {
             Promise<Void> lookup = Promise.promise();

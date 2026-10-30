@@ -29,6 +29,8 @@ export interface Calendar {
   icsLink?: string;
   /** "structure" pour un agenda d'établissement (POST /calendar/calendars/structure). */
   type?: string;
+  /** Nom de l'établissement d'un agenda d'établissement (résolu côté serveur, `enrichStructureNames`). */
+  structureName?: string;
   /** Publication sur le portail public (flux ICS anonyme GET /calendar/pub/:id/events.ics). */
   portalPublished?: boolean;
   /** Agenda externe : date (ISO) de la dernière synchronisation du flux. */
