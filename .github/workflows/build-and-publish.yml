@@ -302,7 +302,9 @@ jobs:
       # ne cause donc plus de regression ?ui=react (le jar contient index.js). La CI redevient le
       # publieur nexus (delete-then-deploy pour la même version -patched).
       - name: Configure Maven for rct-nexus
-        if: startsWith(github.ref, 'refs/tags/') || endsWith(github.ref, '-patched') || endsWith(github.ref, '-patched-dev')
+        # Publication sur TAG uniquement : un push de branche patchée republierait le jar
+        # de production en place, sous des coordonnées inchangées.
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           mkdir -p ~/.m2
           cat > ~/.m2/settings.xml << 'EOF'
@@ -343,7 +345,9 @@ jobs:
           EOF
 
       - name: Publish fat JAR to rct-nexus
-        if: startsWith(github.ref, 'refs/tags/') || endsWith(github.ref, '-patched') || endsWith(github.ref, '-patched-dev')
+        # Publication sur TAG uniquement : un push de branche patchée republierait le jar
+        # de production en place, sous des coordonnées inchangées.
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           NEXUS_USER: ${{ secrets.NEXUS_USER }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
