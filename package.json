@@ -57,5 +57,14 @@
     "entcore-css-lib": "npm:ode-csslib@4.2.3",
     "underscore": "1.13.8",
     "vite": "^5.4.6"
+  },
+  "pnpm": {
+    "overrides": {
+      "cipher-base": "^1.0.5",
+      "elliptic": "^6.6.1",
+      "sha.js": "^2.4.12",
+      "handlebars": "^4.7.10",
+      "pbkdf2": "^3.1.3"
+    }
   }
 }
