@@ -108,12 +108,12 @@ jobs:
           test -f src/main/resources/public/dist/application.js || { echo "::error::public/dist/application.js missing"; exit 1; }
           test -f src/main/resources/public/js/behaviours.js    || { echo "::error::public/js/behaviours.js missing"; exit 1; }
           test -f src/main/resources/public/css/calendar.css    || { echo "::error::public/css/calendar.css missing"; exit 1; }
-          # Entrée React empreintée (index-<hash>.js) : on vérifie qu'il y en a exactement une,
-          # et que la vue générée la référence bien.
-          ENTRY=$(ls src/main/resources/public/index-*.js 2>/dev/null | head -1)
-          test -n "$ENTRY" || { echo "::error::public/index-<hash>.js (React frontend/) missing"; exit 1; }
-          grep -q "$(basename "$ENTRY")" src/main/resources/view/calendar-react.html \
-            || { echo "::error::view/calendar-react.html ne reference pas $(basename "$ENTRY")"; exit 1; }
+          # Entrée React empreintée (index-<hash>.js) : la vue générée fait foi.
+          # Depuis vite 6, le build émet plusieurs index-<hash>.js (un chunk de
+          # dépendance porte le même nom), et `ls | head -1` tombait sur le mauvais.
+          ENTRY=$(grep -o 'index-[A-Za-z0-9_-]*\.js' src/main/resources/view/calendar-react.html | head -1)
+          test -n "$ENTRY" || { echo "::error::view/calendar-react.html ne reference aucun index-<hash>.js"; exit 1; }
+          test -f "src/main/resources/public/$ENTRY" || { echo "::error::public/$ENTRY (React frontend/) missing"; exit 1; }
 
       - name: Upload frontend assets
         uses: actions/upload-artifact@v7
