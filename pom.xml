@@ -36,10 +36,10 @@
     <properties>
         <entCoreVersion>6.16.14-patched</entCoreVersion>
         <entCoreLibsVersion>6.16.8-patched</entCoreLibsVersion>
-        <junitVersion>4.10</junitVersion>
+        <junitVersion>4.13.1</junitVersion>
         <mockitoVersion>[2.0,3.0)</mockitoVersion>
         <powerMockVersion>2.0.2</powerMockVersion>
-        <ical4jVersion>3.2.10</ical4jVersion>
+        <ical4jVersion>3.2.19</ical4jVersion>
         <toolsVersion>2.0.0-final</toolsVersion>
         <reflectionsVersion>0.10.2</reflectionsVersion>
         <mongodb-helper.version>3.1-SNAPSHOT</mongodb-helper.version>
