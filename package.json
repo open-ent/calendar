@@ -53,7 +53,7 @@
     "jest-environment-node": "23.4.0",
     "ts-jest": "26.5.6",
     "@mdi/font": "6.9.96",
-    "sass": "1.107.1",
+    "sass": "1.108.2",
     "entcore-css-lib": "npm:ode-csslib@4.2.3",
     "underscore": "1.13.8",
     "vite": "^6.0.0"
