@@ -94,8 +94,8 @@ importers:
         specifier: 23.4.0
         version: 23.4.0
       sass:
-        specifier: 1.107.1
-        version: 1.107.1
+        specifier: 1.108.2
+        version: 1.108.2
       ts-jest:
         specifier: 26.5.6
         version: 26.5.6(jest@26.6.3)(typescript@4.9.5)
@@ -104,7 +104,7 @@ importers:
         version: 1.13.8
       vite:
         specifier: ^6.0.0
-        version: 6.4.5(@types/node@7.10.14)(sass@1.107.1)
+        version: 6.4.5(@types/node@7.10.14)(sass@1.108.2)
 
 packages:
 
@@ -3808,8 +3808,8 @@ packages:
     deprecated: some dependency vulnerabilities fixed, support for node < 10 dropped, and newer ECMAScript syntax/features added
     hasBin: true
 
-  sass@1.107.1:
-    resolution: {integrity: sha512-aJ1/LvxOOb04YhmiBjzZn3jVwdHKol+OVhoMV6fFl02fF9T3i+5Mg9l/CnzqtM+NX5Jn5o3lAbs/ZJivTCLHfQ==}
+  sass@1.108.2:
+    resolution: {integrity: sha512-kugK8djotnG9HQRPTOf36asKYlxg8rWWsNLYHOgWDIVOiZQqlRfKBgF4XXM6kfw146kIDMvm57B4GIkvDSyTzA==}
     engines: {node: '>=20.19.0'}
     hasBin: true
 
@@ -9278,7 +9278,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  sass@1.107.1:
+  sass@1.108.2:
     dependencies:
       chokidar: 5.0.0
       immutable: 5.1.9
@@ -9997,7 +9997,7 @@ snapshots:
       remove-trailing-separator: 1.1.0
       replace-ext: 1.0.1
 
-  vite@6.4.5(@types/node@7.10.14)(sass@1.107.1):
+  vite@6.4.5(@types/node@7.10.14)(sass@1.108.2):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.7)
@@ -10008,7 +10008,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 7.10.14
       fsevents: 2.3.3
-      sass: 1.107.1
+      sass: 1.108.2
 
   vm-browserify@0.0.4:
     dependencies:
